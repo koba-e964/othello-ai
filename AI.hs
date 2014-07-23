@@ -5,9 +5,11 @@ module AI where
 import Data.Array.IO
 import Data.Array.MArray
 import Data.List ((\\))
+import Data.Maybe
 import Control.Monad 
 
 import System.Random
+import System.Timeout
 import Data.Function
 import Data.List
 import Data.IORef
@@ -22,6 +24,17 @@ gameEnd board = do
   ms2 <- validMoves board white
   return $ null ms1 && null ms2
 
+weightOfPlay :: (Int, Int) -> Int
+weightOfPlay (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-j) where
+  sub 1 1 = 10
+  sub 1 2 = 2
+  sub 2 1 = 2
+  sub 2 2 = 1
+  sub 1 3 = 4
+  sub 3 1 = 4
+  sub _ _ = 5
+  
+
 myPlay :: Board -> Color -> IO Mv 
 myPlay board color =
     do ms <- validMoves board color 
@@ -30,12 +43,15 @@ myPlay board color =
          _  -> 
              do
                 boards <- mapM (\mv@(mvi, mvj) -> fmap (\x ->(mv,x)) (doMoveCopy board (M mvi mvj) color)) ms
-                vals <- forM boards $ \(mv, bd) -> do
-                  val <- alphaBeta bd 4 color (oppositeColor color) (-100000000) 100000000
-                  return (mv, val)
+                blc <- count board black
+                whc <- count board black
+                let depth = if blc + whc >= 54 then 10 else 3
+                vals <- fmap catMaybes $ forM boards $ \(mv, bd) -> do
+                  val <- timeout 1000000 $ alphaBeta bd depth color (oppositeColor color) (-100000000) 100000000 -- timeout 1.0sec
+                  case val of {Just v -> return $ Just (mv, v); Nothing -> return Nothing;}
                 print vals
                 putStrLn ""
-                let ((i,j), _optval) = maximumBy (compare `on` snd) vals
+                let ((i,j), _optval) = if null vals then (head ms, 0) else maximumBy (compare `on` snd) vals
                 return $ M i j 
 
 alphaBeta :: Board -> Int -> Color -> Color -> Int -> Int -> IO Int
@@ -78,9 +94,12 @@ staticEval board color = do
   if isGameEnd then do
     my <- count board color 
     opp <- count board (oppositeColor color)
-    if my > opp then return 10000000 else return $ -10000000
+    return $ case compare my opp of
+      LT -> -10000000 
+      EQ -> - 5000000
+      GT ->  10000000
   else
-    eval3 board color
+    eval4 board color
 
 {- The number of disks -}
 eval1 :: Board -> Color -> IO Int
@@ -101,4 +120,14 @@ eval3 board color = do
   msopp <- validMoves board opp
   iv <- count board color
   return $ if blc + whc >= 50 then iv - (blc + whc) else length msmy - length msopp
+
+eval4 :: Board -> Color -> IO Int
+eval4 board color = do
+  let opp = oppositeColor color
+  blc <- count board black
+  whc <- count board black
+  msmy <- validMoves board color
+  msopp <- validMoves board opp
+  iv <- count board color
+  return $ if blc + whc >= 50 then iv - (blc + whc) else sum (map weightOfPlay msmy) - sum (map weightOfPlay msopp)
 
