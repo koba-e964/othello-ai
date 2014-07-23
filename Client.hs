@@ -22,7 +22,8 @@ data Config
                port :: PortNumber, 
                playerName :: String,
                verbose :: Bool,
-               helpMode :: Bool } 
+               helpMode :: Bool,
+               heuristicsMode :: Heuristics } 
 
 type WinLose = IORef (Int, Int)
 addWin :: WinLose -> IO ()
@@ -41,7 +42,7 @@ showWinLose arg = do
   return $ "(Win, Lose) = (" ++ show x ++ ", " ++ show y ++ ")"
 
 
-defaultConf = Config "localhost" 3000 "KobaAI" False False -- default name is changed.
+defaultConf = Config "localhost" 3000 "KobaAI" False False 4 -- default name is changed.
 
 options :: [OptDescr (Config -> Config)]
 options =
@@ -60,6 +61,9 @@ options =
     , Option ['h','?'] ["help"]
              (NoArg (\conf -> conf { helpMode = True }))
              "show this help"
+    , Option ['s'] ["heuristics"]
+             (ReqArg (\s conf -> conf { heuristicsMode = read s :: Heuristics }) "HEURISTICS")
+             "the kind of routine (1..4)"
     ]
 
 usageMessage :: String
@@ -149,7 +153,7 @@ waitStart !h !conf winLose =
 
 performMyMove :: Handle -> Board -> Color -> [OPMove] -> String -> Int -> Config -> WinLose -> IO ()
 performMyMove h board color hist opname mytime conf winLose =
-    do { pmove <- myPlay board color
+    do { pmove <- myPlay board color (heuristicsMode conf)
        ; board <- doMove board pmove color
        ; hPutCommand h $ Move pmove 
        ; when (verbose conf) $ putStrLn $ replicate 80 '-'

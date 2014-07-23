@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module AI where
 
 
@@ -10,13 +11,35 @@ import Control.Monad
 
 import System.Random
 import System.Timeout
+import Control.Exception
 import Data.Function
 import Data.List
 import Data.IORef
+import Data.Typeable
+import Text.Printf
 
 import Color 
 import Command
 import Play
+
+type Heuristics = Int
+
+winValue :: Int
+loseValue :: Int
+drawValue :: Int
+maxValue :: Int
+minValue :: Int
+
+winValue  =  10000000
+loseValue = -10000000
+drawValue = - 5000000
+maxValue  =  100000000
+minValue  = -100000000
+
+data StopSearch = StopSearch String deriving (Show, Typeable)
+
+instance Exception StopSearch 
+
 
 gameEnd :: Board -> IO Bool
 gameEnd board = do
@@ -35,8 +58,8 @@ weightOfPlay (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-j
   sub _ _ = 5
   
 
-myPlay :: Board -> Color -> IO Mv 
-myPlay board color =
+myPlay :: Board -> Color -> Heuristics -> IO Mv 
+myPlay board color mode =
     do ms <- validMoves board color 
        case ms of 
          [] -> return Pass
@@ -45,61 +68,78 @@ myPlay board color =
                 boards <- mapM (\mv@(mvi, mvj) -> fmap (\x ->(mv,x)) (doMoveCopy board (M mvi mvj) color)) ms
                 blc <- count board black
                 whc <- count board black
-                let depth = if blc + whc >= 54 then 10 else 3
-                vals <- fmap catMaybes $ forM boards $ \(mv, bd) -> do
-                  val <- timeout 500000 $ alphaBeta bd depth color (oppositeColor color) (-100000000) 100000000 -- timeout 1.0sec
-                  case val of {Just v -> return $ Just (mv, v); Nothing -> return Nothing;}
-                print vals
-                putStrLn ""
-                let ((i,j), _optval) = if null vals then (head ms, 0) else maximumBy (compare `on` snd) vals
-                return $ M i j 
+                opt <- newIORef (Nothing :: Maybe (Mv, Int))
+                timeout 500000 $ catch (
+                  forM_ [0..] (nextMoveDepth board boards color mode opt)
+                 ) (\(StopSearch str) -> putStrLn str)
+                optmv <- readIORef opt
+                let mv = case optmv of { Nothing -> ( \(i,j) -> M i j) (head ms); Just (o, _) -> o; }
+                return mv;
 
-alphaBeta :: Board -> Int -> Color -> Color -> Int -> Int -> IO Int
-alphaBeta board depth mycol curcol alpha beta = do
+-- overwrites opt and stort the optimal value
+nextMoveDepth :: Board -> [((Int, Int), Board)] -> Color -> Heuristics -> IORef (Maybe (Mv, Int)) -> Int -> IO ()
+nextMoveDepth board boards color mode opt depth = do
+       curopt <- readIORef opt
+       case curopt of
+         Nothing -> return ()
+         Just (_, curoptval) -> do
+           when (curoptval == winValue) $ throwIO (StopSearch $ printf "Path to the victory was detected. (current depth = %d)" depth)
+           when (curoptval == loseValue) $ throwIO (StopSearch $ printf "Path to the defeat was detected. (current depth = %d)" depth)
+       vals <- forM boards $ \(mv, bd) -> do
+         val <- alphaBeta mode bd depth color (oppositeColor color) minValue maxValue
+         return (mv, val)
+       print vals
+       putStrLn ""
+       let ((i, j), optval) = if null vals then undefined else maximumBy (compare `on` snd) vals
+       printf "depth = %d, move = (%d, %d), value = %d\n" depth i j optval
+       writeIORef opt $ Just (M i j, optval)
+
+alphaBeta :: Heuristics -> Board -> Int -> Color -> Color -> Int -> Int -> IO Int
+alphaBeta mode board depth mycol curcol alpha beta = do
   isGameEnd <- gameEnd board
   if isGameEnd || depth == 0 then
-     staticEval board mycol
+     staticEval board mycol mode
   else if curcol == mycol then do
     aref <- newIORef alpha
     ms <- validMoves board curcol
     let moves = if null ms then [Pass] else map (\(i,j) -> M i j) ms
-    forM moves $ \m -> do
+    forM_ moves $ \m -> do
       calpha <- readIORef aref
       if calpha >= beta then do
          writeIORef aref beta
       else do 
         nxt <- doMoveCopy board m curcol
         let nextp = case m of { Pass -> curcol; _ -> oppositeColor curcol;}
-        result <- alphaBeta nxt (depth - 1) mycol nextp calpha beta
+        result <- alphaBeta mode nxt (depth - 1) mycol nextp calpha beta
         modifyIORef aref (max result)
     readIORef aref
   else do
     bref <- newIORef beta
     ms <- validMoves board curcol
     let moves = if null ms then [Pass] else map (\(i,j) -> M i j) ms
-    forM moves $ \m -> do
+    forM_ moves $ \m -> do
       cbeta <- readIORef bref
       if alpha >= cbeta then do
          writeIORef bref alpha
       else do 
         nxt <- doMoveCopy board m curcol
         let nextp = case m of { Pass -> curcol; _ -> oppositeColor curcol;}
-        result <- alphaBeta nxt (depth - 1) mycol nextp alpha cbeta
+        result <- alphaBeta mode nxt (depth - 1) mycol nextp alpha cbeta
         modifyIORef bref (min result)
     readIORef bref
 
-staticEval :: Board -> Color -> IO Int
-staticEval board color = do
+staticEval :: Board -> Color -> Heuristics -> IO Int
+staticEval board color mode = do
   isGameEnd <- gameEnd board
   if isGameEnd then do
     my <- count board color 
     opp <- count board (oppositeColor color)
     return $ case compare my opp of
-      LT -> -10000000 
-      EQ -> - 5000000
-      GT ->  10000000
+      LT -> loseValue
+      EQ -> drawValue
+      GT ->  winValue
   else
-    eval4 board color
+    ([eval1, eval2, eval3, eval4] !! (mode - 1)) board color
 
 {- The number of disks -}
 eval1 :: Board -> Color -> IO Int
