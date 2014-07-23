@@ -23,7 +23,9 @@ data Config
                playerName :: String,
                verbose :: Bool,
                helpMode :: Bool,
-               heuristicsMode :: Heuristics } 
+               heuristicsMode :: Heuristics,
+               thinkingTime ::Int -- in microseconds
+               } 
 
 type WinLose = IORef (Int, Int)
 addWin :: WinLose -> IO ()
@@ -42,7 +44,7 @@ showWinLose arg = do
   return $ "(Win, Lose) = (" ++ show x ++ ", " ++ show y ++ ")"
 
 
-defaultConf = Config "localhost" 3000 "KobaAI" False False 5 -- default name is changed.
+defaultConf = Config "localhost" 3000 "KobaAI" False False 5 500000 -- default name is changed.
 
 options :: [OptDescr (Config -> Config)]
 options =
@@ -64,6 +66,9 @@ options =
     , Option ['s'] ["heuristics"]
              (ReqArg (\s conf -> conf { heuristicsMode = read s :: Heuristics }) "HEURISTICS")
              "the kind of routine (1..5)"
+    , Option ['t'] ["time"]
+             (ReqArg (\s conf -> conf { thinkingTime = let t = read s :: Double in if t < 0 || t >= 6e5 then 500000 else round (t * 1e3) }) "THINKTIME")
+             "the length of time to think (in millisecond (ms)) (max: 600000ms (10min.)"
     ]
 
 usageMessage :: String
@@ -153,7 +158,7 @@ waitStart !h !conf winLose =
 
 performMyMove :: Handle -> Board -> Color -> [OPMove] -> String -> Int -> Config -> WinLose -> IO ()
 performMyMove h board color hist opname mytime conf winLose =
-    do { pmove <- myPlay board color (heuristicsMode conf)
+    do { pmove <- myPlay board color (heuristicsMode conf) (thinkingTime conf)
        ; board <- doMove board pmove color
        ; hPutCommand h $ Move pmove 
        ; when (verbose conf) $ putStrLn $ replicate 80 '-'

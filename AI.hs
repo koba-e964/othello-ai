@@ -74,9 +74,9 @@ weightPop board color = do
      return $ c == color
    ) [(i,j) | i <- [1..8], j <- [1..8]]
   return $ sum $ map weightOfPlace ls
-
-myPlay :: Board -> Color -> Heuristics -> IO Mv 
-myPlay board color mode =
+-- | timeout : timeout in microseconds (us)
+myPlay :: Board -> Color -> Heuristics -> Int -> IO Mv 
+myPlay board color mode time =
     do ms <- validMoves board color 
        case ms of 
          [] -> return Pass
@@ -86,7 +86,7 @@ myPlay board color mode =
                 blc <- count board black
                 whc <- count board black
                 opt <- newIORef (Nothing :: Maybe (Mv, Int))
-                timeout 500000 $ catch (
+                timeout time $ catch (
                   forM_ [0..] (nextMoveDepth board boards color mode opt)
                  ) (\(StopSearch str) -> putStrLn str)
                 optmv <- readIORef opt
