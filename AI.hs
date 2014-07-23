@@ -47,7 +47,7 @@ myPlay board color =
                 whc <- count board black
                 let depth = if blc + whc >= 54 then 10 else 3
                 vals <- fmap catMaybes $ forM boards $ \(mv, bd) -> do
-                  val <- timeout 1000000 $ alphaBeta bd depth color (oppositeColor color) (-100000000) 100000000 -- timeout 1.0sec
+                  val <- timeout 500000 $ alphaBeta bd depth color (oppositeColor color) (-100000000) 100000000 -- timeout 1.0sec
                   case val of {Just v -> return $ Just (mv, v); Nothing -> return Nothing;}
                 print vals
                 putStrLn ""
