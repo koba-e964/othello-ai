@@ -10,6 +10,7 @@ import Play
 
 import Text.Printf 
 import System.IO
+import Data.IORef
 
 import Color 
 import Control.Monad
@@ -22,6 +23,23 @@ data Config
                playerName :: String,
                verbose :: Bool,
                helpMode :: Bool } 
+
+type WinLose = IORef (Int, Int)
+addWin :: WinLose -> IO ()
+addWin arg = do
+  (x,y) <- readIORef arg
+  writeIORef arg (x+1,y)
+
+addLose :: WinLose -> IO ()
+addLose arg = do
+  (x,y) <- readIORef arg
+  writeIORef arg (x,y+1)
+
+showWinLose :: WinLose -> IO String
+showWinLose arg = do
+  (x,y) <- readIORef arg
+  return $ "(Win, Lose) = (" ++ show x ++ ", " ++ show y ++ ")"
+
 
 defaultConf = Config "localhost" 3000 "KobaAI" False False -- default name is changed.
 
@@ -110,10 +128,11 @@ client !conf =
        ; h <- connectTo (host conf) (PortNumber $ port conf) 
        ; putStrLn "Connection Ok."
        ; hPutCommand h $ Open (playerName conf)
-       ; waitStart h conf }
+       ; winLose <- newIORef (0,0)
+       ; waitStart h conf winLose }
 
-waitStart :: Handle -> Config -> IO () 
-waitStart !h !conf =
+waitStart :: Handle -> Config -> WinLose -> IO () 
+waitStart !h !conf winLose =
     do { c <- hGetCommand' h 
        ; case c of 
            Bye scores -> 
@@ -121,15 +140,15 @@ waitStart !h !conf =
            Start color opname mytime ->
                do { board <- initBoard 
                   ; if color == black then 
-                        performMyMove h board color [] opname mytime conf 
+                        performMyMove h board color [] opname mytime conf winLose
                     else
-                        waitOpponentMove h board color [] opname mytime conf }
+                        waitOpponentMove h board color [] opname mytime conf winLose}
            _ -> 
                error $ "Invalid Command: " ++ show c 
        }
 
-performMyMove :: Handle -> Board -> Color -> [OPMove] -> String -> Int -> Config -> IO ()
-performMyMove h board color hist opname mytime conf =
+performMyMove :: Handle -> Board -> Color -> [OPMove] -> String -> Int -> Config -> WinLose -> IO ()
+performMyMove h board color hist opname mytime conf winLose =
     do { pmove <- myPlay board color
        ; board <- doMove board pmove color
        ; hPutCommand h $ Move pmove 
@@ -139,15 +158,15 @@ performMyMove h board color hist opname mytime conf =
        ; c <- hGetCommand' h 
        ; case c of 
            Ack mytime' -> 
-               waitOpponentMove h board color (PMove pmove:hist) opname mytime' conf 
+               waitOpponentMove h board color (PMove pmove:hist) opname mytime' conf winLose
            End wl n m r ->
-               procEnd h board color hist opname wl n m r conf 
+               procEnd h board color hist opname wl n m r conf winLose
            _ -> 
                error $ "Invalid Command: " ++ show c 
        }
 
-waitOpponentMove :: Handle -> Board -> Color -> [OPMove] -> String -> Int -> Config -> IO ()
-waitOpponentMove h board color hist opname mytime conf =
+waitOpponentMove :: Handle -> Board -> Color -> [OPMove] -> String -> Int -> Config -> WinLose -> IO ()
+waitOpponentMove h board color hist opname mytime conf winLose =
     do { c <- hGetCommand' h
        ; case c of 
            Move omove ->
@@ -155,20 +174,22 @@ waitOpponentMove h board color hist opname mytime conf =
                   ; when (verbose conf) $ putStrLn $ replicate 80 '-'
                   ; when (verbose conf) $ putStrLn ("OMove: " ++ show omove ++ " " ++ showColor color) 
                   ; when (verbose conf) (putBoard board)
-                  ; performMyMove h board color (OMove omove:hist) opname mytime conf }
+                  ; performMyMove h board color (OMove omove:hist) opname mytime conf winLose }
            End wl n m r -> 
-               procEnd h board color hist opname wl n m r conf 
+               procEnd h board color hist opname wl n m r conf winLose
            _ -> 
                error $ "Invalid Command: " ++ show c 
        }
            
-procEnd :: Handle -> Board -> Color -> [OPMove] -> String -> WL -> Int -> Int -> String -> Config -> IO ()
-procEnd h board color hist opname wl n m r conf =
+procEnd :: Handle -> Board -> Color -> [OPMove] -> String -> WL -> Int -> Int -> String -> Config -> WinLose -> IO ()
+procEnd h board color hist opname wl n m r conf winLose =
     do { case wl of 
-           Win ->
+           Win -> do
                putStrLn $ printf "You win! (%d vs. %d) -- %s." n m r
-           Lose -> 
+               addWin winLose
+           Lose -> do
                putStrLn $ printf "You lose! (%d vs. %d) -- %s." n m r
+               addLose winLose
            Tie ->
                putStrLn $ printf "Draw (%d vs. %d) -- %s." n m r
        ; putStrLn $ printf "Your name: %s (%s)  Oppnent name: %s (%s)."
@@ -176,7 +197,8 @@ procEnd h board color hist opname wl n m r conf =
                       opname (showColor (oppositeColor color))
        ; putBoard board 
        ; putStrLn $ showHist hist 
-       ; waitStart h conf }
+       ; putStrLn =<< showWinLose winLose
+       ; waitStart h conf winLose }
                   
 main :: IO () 
 main = withSocketsDo $ 
