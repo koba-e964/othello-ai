@@ -160,7 +160,10 @@ staticEval board color mode = do
 
 {- The number of disks -}
 eval1 :: Board -> Color -> IO Int
-eval1 = count
+eval1 board color = do
+    my <- count board color 
+    opp <- count board (oppositeColor color)
+    return $ my - opp
 
 eval2 :: Board -> Color -> IO Int
 eval2 board color = do
