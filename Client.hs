@@ -42,7 +42,7 @@ showWinLose arg = do
   return $ "(Win, Lose) = (" ++ show x ++ ", " ++ show y ++ ")"
 
 
-defaultConf = Config "localhost" 3000 "KobaAI" False False 4 -- default name is changed.
+defaultConf = Config "localhost" 3000 "KobaAI" False False 5 -- default name is changed.
 
 options :: [OptDescr (Config -> Config)]
 options =
@@ -63,7 +63,7 @@ options =
              "show this help"
     , Option ['s'] ["heuristics"]
              (ReqArg (\s conf -> conf { heuristicsMode = read s :: Heuristics }) "HEURISTICS")
-             "the kind of routine (1..4)"
+             "the kind of routine (1..5)"
     ]
 
 usageMessage :: String

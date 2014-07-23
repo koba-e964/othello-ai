@@ -49,7 +49,7 @@ gameEnd board = do
 
 weightOfPlay :: (Int, Int) -> Int
 weightOfPlay (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-j) where
-  sub 1 1 = 10
+  sub 1 1 = 1000
   sub 1 2 = 2
   sub 2 1 = 2
   sub 2 2 = 1
@@ -57,6 +57,23 @@ weightOfPlay (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-j
   sub 3 1 = 4
   sub _ _ = 5
   
+weightOfPlace :: (Int, Int) -> Int
+weightOfPlace (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-j) where
+  sub 1 1 = 100
+  sub 1 2 = -2
+  sub 2 1 = -2
+  sub 2 2 = -6
+  sub 1 3 = -1
+  sub 3 1 = -1
+  sub _ _ = 0
+
+weightPop :: Board -> Color -> IO Int
+weightPop board color = do
+  ls <- filterM ( \(i, j) -> do
+     c <- readArray board (i, j)
+     return $ c == color
+   ) [(i,j) | i <- [1..8], j <- [1..8]]
+  return $ sum $ map weightOfPlace ls
 
 myPlay :: Board -> Color -> Heuristics -> IO Mv 
 myPlay board color mode =
@@ -139,7 +156,7 @@ staticEval board color mode = do
       EQ -> drawValue
       GT ->  winValue
   else
-    ([eval1, eval2, eval3, eval4] !! (mode - 1)) board color
+    ([eval1, eval2, eval3, eval4, eval5] !! (mode - 1)) board color
 
 {- The number of disks -}
 eval1 :: Board -> Color -> IO Int
@@ -170,4 +187,16 @@ eval4 board color = do
   msopp <- validMoves board opp
   iv <- count board color
   return $ if blc + whc >= 50 then iv - (blc + whc) else sum (map weightOfPlay msmy) - sum (map weightOfPlay msopp)
+
+eval5 :: Board -> Color -> IO Int
+eval5 board color = do
+  let opp = oppositeColor color
+  blc <- count board black
+  whc <- count board black
+  msmy <- validMoves board color
+  msopp <- validMoves board opp
+  iv <- count board color
+  myWpop <- weightPop board color
+  oppWpop <- weightPop board (oppositeColor color)
+  return $ myWpop - oppWpop + sum (map weightOfPlay msmy) - sum (map weightOfPlay msopp)
 
