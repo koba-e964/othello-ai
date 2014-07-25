@@ -52,11 +52,11 @@ minBy comp x y = case comp x y of
    LT -> x
    _  -> y
 
-gameEnd :: Board -> IO Bool
+gameEnd :: CBoard -> Bool
 gameEnd board = do
-  ms1 <- validMoves board black
-  ms2 <- validMoves board white
-  return $ null ms1 && null ms2
+  let ms1 = validMovesC board black
+      ms2 = validMovesC board white
+   in null ms1 && null ms2
 
 weightOfPlay :: (Int, Int) -> Int
 weightOfPlay (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-j) where
@@ -78,24 +78,21 @@ weightOfPlace (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-
   sub 3 1 = -1
   sub _ _ = 0
 
-weightPop :: Board -> Color -> IO Int
-weightPop board color = do
-  ls <- filterM ( \(i, j) -> do
-     c <- readArray board (i, j)
-     return $ c == color
-   ) [(i,j) | i <- [1..8], j <- [1..8]]
-  return $ sum $ map weightOfPlace ls
+weightPop :: CBoard -> Color -> Int
+weightPop board color =
+  let ls = filter ( \(i, j) -> readCBoardUnsafe board i j == color) [(i,j) | i <- [1..8], j <- [1..8]]
+   in sum $ map weightOfPlace ls
 -- | timeout : timeout in microseconds (us)
-myPlay :: Board -> Color -> Heuristics -> Int -> IO Mv 
-myPlay board color mode time =
-    do ms <- validMoves board color 
+myPlay :: CBoard -> Color -> Heuristics -> Int -> IO Mv 
+myPlay board color mode time = do
+    let ms = validMovesC board color in
        case ms of 
          [] -> return Pass
          _  -> 
              do
-                boards <- newIORef =<< mapM (\mv@(mvi, mvj) -> fmap (\x ->(mv,x)) (doMoveCopy board (M mvi mvj) color)) ms
-                blc <- count board black
-                whc <- count board black
+                boards <- newIORef $ map (\mv@(mvi, mvj) -> (mv, doMoveC board (M mvi mvj) color)) ms
+                let blc = countC board black
+                let whc = countC board black
                 opt <- newIORef (Nothing :: Maybe (Mv, Int))
                 timeout time $ catch (
                   forM_ [0..] (nextMoveDepth board boards color mode opt)
@@ -106,7 +103,7 @@ myPlay board color mode time =
 
 -- overwrites opt and stort the optimal value
 -- boards is rearranged after operation
-nextMoveDepth :: Board -> IORef [((Int, Int), Board)] -> Color -> Heuristics -> IORef (Maybe (Mv, Int)) -> Int -> IO ()
+nextMoveDepth :: CBoard -> IORef [((Int, Int), CBoard)] -> Color -> Heuristics -> IORef (Maybe (Mv, Int)) -> Int -> IO ()
 nextMoveDepth board boardsRef color mode opt depth = do
        curopt <- readIORef opt
        boards <- readIORef boardsRef
@@ -127,96 +124,96 @@ nextMoveDepth board boardsRef color mode opt depth = do
        putStrLn $ "path = " ++ show (fmap (M i j :) path)
        writeIORef opt $ Just (M i j, optval)
 
-alphaBeta :: Heuristics -> Board -> Int -> Color -> Color -> Int -> Int -> IO (Int, Maybe [Mv])
+alphaBeta :: Heuristics -> CBoard -> Int -> Color -> Color -> Int -> Int -> IO (Int, Maybe [Mv])
 alphaBeta mode board depth mycol curcol alpha beta = do
-  isGameEnd <- gameEnd board
+  let isGameEnd = gameEnd board
   if isGameEnd || depth == 0 then do
-     result <- staticEval board mycol mode
+     let result = staticEval board mycol mode
      return (result, Just [])
   else if curcol == mycol then do
     aref <- newIORef (alpha, Nothing)
-    ms <- validMoves board curcol
+    let ms = validMovesC board curcol
     let moves = if null ms then [Pass] else map (\(i,j) -> M i j) ms
     forM_ moves $ \m -> do
       (calpha, _) <- readIORef aref
       if calpha >= beta then do
          writeIORef aref (beta, Nothing)
       else do 
-        nxt <- doMoveCopy board m curcol
+        let nxt = doMoveC board m curcol
         let nextp = oppositeColor curcol
         (result, path) <- alphaBeta mode nxt (depth - 1) mycol nextp calpha beta
         modifyIORef aref (maxBy (compare `on` fst) (result, fmap (m :) path))
     readIORef aref
   else do
     bref <- newIORef (beta, Nothing)
-    ms <- validMoves board curcol
+    let ms = validMovesC board curcol
     let moves = if null ms then [Pass] else map (\(i,j) -> M i j) ms
     forM_ moves $ \m -> do
       (cbeta, _) <- readIORef bref
       if alpha >= cbeta then do
          writeIORef bref (alpha, Nothing)
       else do 
-        nxt <- doMoveCopy board m curcol
+        let nxt = doMoveC board m curcol
         let nextp = oppositeColor curcol
         (result, path) <- alphaBeta mode nxt (depth - 1) mycol nextp alpha cbeta
         modifyIORef bref (minBy (compare `on` fst) (result, fmap (m :) path))
     readIORef bref
 
-staticEval :: Board -> Color -> Heuristics -> IO Int
-staticEval board color mode = do
-  isGameEnd <- gameEnd board
-  if isGameEnd then do
-    my <- count board color 
-    opp <- count board (oppositeColor color)
-    return $ case compare my opp of
-      LT -> loseValue
-      EQ -> drawValue
-      GT ->  winValue
+staticEval :: CBoard -> Color -> Heuristics -> Int
+staticEval board color mode = 
+  let isGameEnd = gameEnd board in
+  if isGameEnd then
+    let my = countC board color 
+        opp = countC board (oppositeColor color) in
+        case compare my opp of
+          LT -> loseValue
+          EQ -> drawValue
+          GT ->  winValue
   else
     ([eval1, eval2, eval3, eval4, eval5] !! (mode - 1)) board color
 
 {- The number of disks -}
-eval1 :: Board -> Color -> IO Int
-eval1 board color = do
-    my <- count board color 
-    opp <- count board (oppositeColor color)
-    return $ my - opp
+eval1 :: CBoard -> Color -> Int
+eval1 board color =
+    let my = countC board color 
+        opp = countC board (oppositeColor color) in
+    my - opp
 
-eval2 :: Board -> Color -> IO Int
-eval2 board color = do
+eval2 :: CBoard -> Color -> Int
+eval2 board color =
   let opp = oppositeColor color
-  ms <- validMoves board opp
-  return $ - (length ms)
+      ms  = validMovesC board opp in
+  - (length ms)
 
-eval3 :: Board -> Color -> IO Int
-eval3 board color = do
+eval3 :: CBoard -> Color -> Int
+eval3 board color =
   let opp = oppositeColor color
-  blc <- count board black
-  whc <- count board black
-  msmy <- validMoves board color
-  msopp <- validMoves board opp
-  iv <- count board color
-  return $ if blc + whc >= 50 then iv - (blc + whc) else length msmy - length msopp
+      blc = countC board black
+      whc = countC board black
+      msmy = validMovesC board color
+      msopp = validMovesC board opp
+      iv = countC board color in
+  if blc + whc >= 50 then iv - (blc + whc) else length msmy - length msopp
 
-eval4 :: Board -> Color -> IO Int
-eval4 board color = do
+eval4 :: CBoard -> Color -> Int
+eval4 board color =
   let opp = oppositeColor color
-  blc <- count board black
-  whc <- count board black
-  msmy <- validMoves board color
-  msopp <- validMoves board opp
-  iv <- count board color
-  return $ if blc + whc >= 50 then iv - (blc + whc) else sum (map weightOfPlay msmy) - sum (map weightOfPlay msopp)
+      blc = countC board black
+      whc = countC board black
+      msmy = validMovesC board color
+      msopp = validMovesC board opp
+      iv = countC board color in
+  if blc + whc >= 50 then iv - (blc + whc) else sum (map weightOfPlay msmy) - sum (map weightOfPlay msopp)
 
-eval5 :: Board -> Color -> IO Int
-eval5 board color = do
+eval5 :: CBoard -> Color -> Int
+eval5 board color =
   let opp = oppositeColor color
-  blc <- count board black
-  whc <- count board black
-  msmy <- validMoves board color
-  msopp <- validMoves board opp
-  iv <- count board color
-  myWpop <- weightPop board color
-  oppWpop <- weightPop board (oppositeColor color)
-  return $ myWpop - oppWpop + sum (map weightOfPlay msmy) - sum (map weightOfPlay msopp)
+      blc = countC board black
+      whc = countC board black
+      msmy = validMovesC board color
+      msopp = validMovesC board opp
+      iv = countC board color 
+      myWpop = weightPop board color
+      oppWpop = weightPop board (oppositeColor color) in
+  myWpop - oppWpop + sum (map weightOfPlay msmy) - sum (map weightOfPlay msopp)
 
