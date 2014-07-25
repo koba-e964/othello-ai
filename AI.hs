@@ -105,7 +105,7 @@ nextMoveDepth board boards color mode opt depth = do
        vals <- forM boards $ \(mv, bd) -> do
          val <- alphaBeta mode bd depth color (oppositeColor color) minValue maxValue
          return (mv, val)
-       print vals
+       print (sortBy (flip (compare `on` snd)) vals) -- sort by value, largest first
        putStrLn ""
        let ((i, j), optval) = if null vals then undefined else maximumBy (compare `on` snd) vals
        printf "depth = %d, move = (%d, %d), value = %d\n" depth i j optval
@@ -113,8 +113,6 @@ nextMoveDepth board boards color mode opt depth = do
 
 alphaBeta :: Heuristics -> Board -> Int -> Color -> Color -> Int -> Int -> IO Int
 alphaBeta mode board depth mycol curcol alpha beta = do
-  -- putBoard board
-  -- printf "depth = %d, [%d, %d] mycol = %d, curcol = %d\n" depth alpha beta mycol curcol
   isGameEnd <- gameEnd board
   if isGameEnd || depth == 0 then
      staticEval board mycol mode

@@ -2,6 +2,7 @@ module Exam where
 
 import Control.Monad
 import Data.Array.IO
+import Data.List
 
 import Color
 import Play
@@ -40,4 +41,11 @@ readBoard str = do
          charToColor 'o' = white
          charToColor 'O' = white
          charToColor '.' = none
+
+-- | getBoard reads 8 lines and convert them to a board.
+
+getBoard :: IO Board
+getBoard = do
+  str <- replicateM 8 getLine
+  readBoard (intercalate "\n" str)
 
