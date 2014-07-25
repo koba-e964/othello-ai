@@ -113,6 +113,8 @@ nextMoveDepth board boards color mode opt depth = do
 
 alphaBeta :: Heuristics -> Board -> Int -> Color -> Color -> Int -> Int -> IO Int
 alphaBeta mode board depth mycol curcol alpha beta = do
+  -- putBoard board
+  -- printf "depth = %d, [%d, %d] mycol = %d, curcol = %d\n" depth alpha beta mycol curcol
   isGameEnd <- gameEnd board
   if isGameEnd || depth == 0 then
      staticEval board mycol mode
@@ -126,7 +128,7 @@ alphaBeta mode board depth mycol curcol alpha beta = do
          writeIORef aref beta
       else do 
         nxt <- doMoveCopy board m curcol
-        let nextp = case m of { Pass -> curcol; _ -> oppositeColor curcol;}
+        let nextp = oppositeColor curcol
         result <- alphaBeta mode nxt (depth - 1) mycol nextp calpha beta
         modifyIORef aref (max result)
     readIORef aref
@@ -140,7 +142,7 @@ alphaBeta mode board depth mycol curcol alpha beta = do
          writeIORef bref alpha
       else do 
         nxt <- doMoveCopy board m curcol
-        let nextp = case m of { Pass -> curcol; _ -> oppositeColor curcol;}
+        let nextp = oppositeColor curcol
         result <- alphaBeta mode nxt (depth - 1) mycol nextp alpha cbeta
         modifyIORef bref (min result)
     readIORef bref
