@@ -93,27 +93,31 @@ myPlay board color mode time = do
                 boards <- newIORef $ map (\mv@(mvi, mvj) -> (mv, doMoveC board (M mvi mvj) color)) ms
                 let blc = countC board black
                 let whc = countC board black
-                opt <- newIORef (Nothing :: Maybe (Mv, Int))
+                opt <- newIORef (Nothing :: Maybe ([Mv], Int))
+                numBoards <- newIORef 0 :: IO (IORef Int)
                 timeout time $ catch (
-                  forM_ [0..] (nextMoveDepth board boards color mode opt)
+                  forM_ [0..] (nextMoveDepth board boards color mode opt numBoards)
                  ) (\(StopSearch str) -> putStrLn str)
                 optmv <- readIORef opt
-                let mv = case optmv of { Nothing -> ( \(i,j) -> M i j) (head ms); Just (o, _) -> o; }
+                numBoardsVal <- readIORef numBoards
+                printf "summary:\n depth : %d\n total #boards: %d\n" (fromMaybe (-1) (fmap (length . fst) optmv)) numBoardsVal
+                let mv = case optmv of { Nothing -> ( \(i,j) -> M i j) (head ms); Just (o:_, _) -> o; _ -> undefined; }
                 return mv;
 
 -- overwrites opt and stort the optimal value
 -- boards is rearranged after operation
-nextMoveDepth :: CBoard -> IORef [((Int, Int), CBoard)] -> Color -> Heuristics -> IORef (Maybe (Mv, Int)) -> Int -> IO ()
-nextMoveDepth board boardsRef color mode opt depth = do
+nextMoveDepth :: CBoard -> IORef [((Int, Int), CBoard)] -> Color -> Heuristics -> IORef (Maybe ([Mv], Int)) -> IORef Int -> Int -> IO ()
+nextMoveDepth board boardsRef color mode opt numBoards depth = do
        curopt <- readIORef opt
        boards <- readIORef boardsRef
+       oldNum <- readIORef numBoards
        case curopt of
          Nothing -> return ()
          Just (_, curoptval) -> do
-           when (curoptval == winValue) $ throwIO (StopSearch $ printf "Path to the victory was detected. (current depth = %d)" depth)
-           when (curoptval == loseValue) $ throwIO (StopSearch $ printf "Path to the defeat was detected. (current depth = %d)" depth)
+           when (curoptval == winValue) $ throwIO (StopSearch $ printf "Path to the victory was detected. (depth = %d)" (depth - 1))
+           when (curoptval == loseValue) $ throwIO (StopSearch $ printf "Path to the defeat was detected. (depth = %d)" (depth - 1))
        vals <- forM boards $ \(mv, bd) -> do
-         valPath <- alphaBeta mode bd depth color (oppositeColor color) minValue maxValue
+         valPath <- alphaBeta mode bd depth color (oppositeColor color) minValue maxValue numBoards
          return (mv, valPath)
        let valsSort = sortBy (flip (compare `on` (fst . snd))) vals
        print valsSort -- sort by value, largest first
@@ -122,13 +126,16 @@ nextMoveDepth board boardsRef color mode opt depth = do
        let ((i, j), (optval, path)) = if null vals then undefined else head valsSort
        printf "depth = %d, move = (%d, %d), value = %d\n" depth i j optval
        putStrLn $ "path = " ++ show (fmap (M i j :) path)
-       writeIORef opt $ Just (M i j, optval)
+       newNum <- readIORef numBoards
+       printf "number of boards in depth %d: %d\n" depth (newNum - oldNum)
+       writeIORef opt $ Just (M i j : fromMaybe [] path, optval) -- path is Just _
 
-alphaBeta :: Heuristics -> CBoard -> Int -> Color -> Color -> Int -> Int -> IO (Int, Maybe [Mv])
-alphaBeta mode board depth mycol curcol alpha beta = do
+alphaBeta :: Heuristics -> CBoard -> Int -> Color -> Color -> Int -> Int -> IORef Int -> IO (Int, Maybe [Mv])
+alphaBeta mode board depth mycol curcol alpha beta numBoards = do
   let isGameEnd = gameEnd board
   if isGameEnd || depth == 0 then do
      let result = staticEval board mycol mode
+     modifyIORef numBoards (+1)
      return (result, Just [])
   else if curcol == mycol then do
     aref <- newIORef (alpha, Nothing)
@@ -141,7 +148,7 @@ alphaBeta mode board depth mycol curcol alpha beta = do
       else do 
         let nxt = doMoveC board m curcol
         let nextp = oppositeColor curcol
-        (result, path) <- alphaBeta mode nxt (depth - 1) mycol nextp calpha beta
+        (result, path) <- alphaBeta mode nxt (depth - 1) mycol nextp calpha beta numBoards
         modifyIORef aref (maxBy (compare `on` fst) (result, fmap (m :) path))
     readIORef aref
   else do
@@ -155,7 +162,7 @@ alphaBeta mode board depth mycol curcol alpha beta = do
       else do 
         let nxt = doMoveC board m curcol
         let nextp = oppositeColor curcol
-        (result, path) <- alphaBeta mode nxt (depth - 1) mycol nextp alpha cbeta
+        (result, path) <- alphaBeta mode nxt (depth - 1) mycol nextp alpha cbeta numBoards
         modifyIORef bref (minBy (compare `on` fst) (result, fmap (m :) path))
     readIORef bref
 
