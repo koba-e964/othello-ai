@@ -6,7 +6,7 @@ import Data.Bits
 import Data.Int
 import Data.Array.IO
 import Data.Array.MArray
-import Data.List ((\\))
+import Data.List ((\\), foldl')
 import Data.STRef
 
 import System.Random
@@ -19,6 +19,7 @@ import Command
 -- 番兵付きの10x10配列
 type Board = IOUArray (Int,Int) Int 
 
+-- | A efficient data structure for states of reversi board.
 -- | each bit corresponds to a cell in the board:
 -- |  0  1  2  3  4  5  6  7
 -- |  8  9 10 11 12 13 14 15
@@ -28,6 +29,9 @@ type Board = IOUArray (Int,Int) Int
 -- | the first Int64 represents the positions of black disks.
 -- | the second Int64 represents the positions of white disks.
 data CBoard = CBoard !Int64 !Int64
+
+
+{- functions for CBoard -}
 
 -- | (4,4) (27) and (5,5) (36) are white
 -- | (4,5) (28) and (5,4) (35) are black
@@ -97,8 +101,8 @@ doMoveC board@(CBoard bl wh) (M i j) color =
            readSTRef st
       in
        if color == black
-         then CBoard (bl .|. val) (wh .|. complement val)
-         else CBoard (bl .|. complement val) (wh .|. val)
+         then CBoard (bl .|. val) (wh .&. complement val)
+         else CBoard (bl .&. complement val) (wh .|. val)
 
 -- valid moves (CBoard)
 validMovesC :: CBoard -> Color ->  [ (Int,Int) ]
@@ -126,6 +130,10 @@ showCBoard board =
            concatMap (\i -> let e = readCBoardUnsafe board i j in 
                              putC e ++ " ") [1..8]
              ++ "\n"
+
+{-   functions for Board -}
+
+
 
 initBoard :: IO Board 
 initBoard = 
@@ -246,5 +254,35 @@ putBoard board =
                              putC e >> putStr " ") [1..8]
              putStrLn ""
 
-    
-         
+{- convertion between CBoard and Board -}
+
+cboardToBoard :: CBoard -> IO Board
+boardToCBoard :: Board -> IO CBoard
+writeToBoard :: CBoard -> Board -> IO ()
+
+cboardToBoard board = do
+  ary <- newArray ((0,0), (9,9)) none
+  writeToBoard board ary
+  return ary
+
+
+boardToCBoard board = do
+    let trans = map $ \(i,j) -> 1 `shiftL` (i + 8 * j - 9) :: Int64
+    bls <- fmap trans $ flip filterM [(i,j) | i <- [1..8], j <- [1..8]] $ \(i,j) -> do
+        el <- readArray board (i,j)
+        return $ el == black
+    whs <- fmap trans $ flip filterM [(i,j) | i <- [1..8], j <- [1..8]] $ \(i,j) -> do
+        el <- readArray board (i,j)
+        return $ el == white
+    return $ CBoard (foldl' (.|.) 0 bls) (foldl' (.|.) 0 whs)
+
+writeToBoard cboard board= do
+  mapM_ (\i ->
+     do writeArray board (i,0) sentinel 
+        writeArray board (i,9) sentinel
+        writeArray board (0,i) sentinel 
+        writeArray board (9,i) sentinel) [0..9]
+  forM_ [(i,j) | i <- [1..8], j <- [1..8]] $ \(i,j) ->
+    writeArray board (i,j) (readCBoardUnsafe cboard i j)
+  return ()
+

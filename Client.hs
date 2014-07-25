@@ -158,12 +158,14 @@ waitStart !h !conf winLose =
 
 performMyMove :: Handle -> Board -> Color -> [OPMove] -> String -> Int -> Config -> WinLose -> IO ()
 performMyMove h board color hist opname mytime conf winLose =
-    do { pmove <- myPlay board color (heuristicsMode conf) (thinkingTime conf)
-       ; board <- doMove board pmove color
+    do { cboard <- boardToCBoard board
+       ; pmove <- myPlay cboard color (heuristicsMode conf) (thinkingTime conf)
+       ; let newCBoard = doMoveC cboard pmove color
+       ; writeToBoard newCBoard board
        ; hPutCommand h $ Move pmove 
        ; when (verbose conf) $ putStrLn $ replicate 80 '-'
        ; when (verbose conf) $ putStrLn ("PMove: " ++ show pmove ++ " " ++ showColor color) 
-       ; when (verbose conf) (putBoard board)
+       ; when (verbose conf) (putStr $ showCBoard newCBoard)
        ; c <- hGetCommand' h 
        ; case c of 
            Ack mytime' -> 
