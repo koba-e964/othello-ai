@@ -5,6 +5,7 @@ module AI where
 
 import Data.Array.IO
 import Data.Array.MArray
+import Data.Bits
 import Data.List ((\\))
 import Data.Maybe
 import Control.Monad 
@@ -79,8 +80,9 @@ weightOfPlace (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-
   sub _ _ = 0
 
 weightPop :: CBoard -> Color -> Int
-weightPop board color =
-  let ls = filter ( \(i, j) -> readCBoardUnsafe board i j == color) [(i,j) | i <- [1..8], j <- [1..8]]
+weightPop (CBoard bl wh) color =
+  let bp = if color == black then bl else wh
+      ls = filter ( \(i, j) -> bp .&. (1 `shiftL` (i + 8*j - 9)) /= 0) [(i,j) | i <- [1..8], j <- [1..8]]
    in sum $ map weightOfPlace ls
 -- | timeout : timeout in microseconds (us)
 myPlay :: CBoard -> Color -> Heuristics -> Int -> IO Mv 
