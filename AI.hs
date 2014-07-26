@@ -116,14 +116,14 @@ nextMoveDepth board boardsRef color mode opt numBoards depth = do
        case curopt of
          Nothing -> return ()
          Just (_, curoptval) -> do
-           when (curoptval == winValue) $ throwIO (StopSearch $ printf "Path to the victory was detected. (depth = %d)" (depth - 1))
-           when (curoptval == loseValue) $ throwIO (StopSearch $ printf "Path to the defeat was detected. (depth = %d)" (depth - 1))
+           when (curoptval >= winValue) $ throwIO (StopSearch $ printf "Path to the victory was detected. (depth = %d)" (depth - 1))
+           when (curoptval <= loseValue) $ throwIO (StopSearch $ printf "Path to the defeat was detected. (depth = %d)" (depth - 1))
        vals <- forM boards $ \(mv, bd) -> do
          valPath <- alphaBeta mode bd depth color (oppositeColor color) minValue maxValue numBoards
          return (mv, valPath)
        let valsSort = sortBy (flip (compare `on` (fst . snd))) vals
-       print valsSort -- sort by value, largest first
-       putStrLn ""
+       -- print valsSort -- sort by value, largest first
+       -- putStrLn ""
        writeIORef boardsRef $ map (\(mv, _) -> (mv, fromMaybe (error "(>_<)") $ lookup mv boards)) valsSort
        let ((i, j), (optval, path)) = if null vals then undefined else head valsSort
        printf "depth = %d, move = (%d, %d), value = %d\n" depth i j optval
@@ -136,7 +136,7 @@ alphaBeta :: Heuristics -> CBoard -> Int -> Color -> Color -> Int -> Int -> IORe
 alphaBeta mode board depth mycol curcol alpha beta numBoards = do
   let isGameEnd = gameEnd board
   if isGameEnd || depth == 0 then do
-     let result = staticEval board mycol mode
+     let result = staticEval board mycol mode isGameEnd
      modifyIORef numBoards (+1)
      return (result, Just [])
   else if curcol == mycol then do
@@ -168,16 +168,15 @@ alphaBeta mode board depth mycol curcol alpha beta numBoards = do
         modifyIORef bref (minBy (compare `on` fst) (result, fmap (m :) path))
     readIORef bref
 
-staticEval :: CBoard -> Color -> Heuristics -> Int
-staticEval board color mode = 
-  let isGameEnd = gameEnd board in
+staticEval :: CBoard -> Color -> Heuristics -> Bool -> Int
+staticEval board color mode isGameEnd = 
   if isGameEnd then
     let my = countC board color 
         opp = countC board (oppositeColor color) in
         case compare my opp of
-          LT -> loseValue
+          LT -> loseValue + my - opp
           EQ -> drawValue
-          GT ->  winValue
+          GT ->  winValue + my - opp
   else
     ([eval1, eval2, eval3, eval4, eval5] !! (mode - 1)) board color
 
