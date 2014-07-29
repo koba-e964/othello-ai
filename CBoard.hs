@@ -1,18 +1,13 @@
 module CBoard where
 
 import Common
-import Control.Exception
 import Control.Monad
 import Control.Monad.ST
 import Data.Bits
-import Data.Function
 import Data.List
 import Data.Int
-import Data.IORef
 import Data.Array.IO
 import Data.STRef
-import Data.Typeable
-import Text.Printf
 
 import Color 
 import Command
@@ -23,7 +18,7 @@ import Command
 -- | (4,4) (27) and (5,5) (36) are white
 -- | (4,5) (28) and (5,4) (35) are black
 initCBoard :: CBoard
-initCBoard = CBoard (2^27 + 2^36) (2^28 + 2^35)
+initCBoard = CBoard (2^(27 :: Int) + 2^(36 :: Int)) (2^(28 :: Int) + 2^(35 :: Int))
 
 readCBoard :: CBoard -> Int -> Int -> Color
 readCBoard board i j
@@ -31,7 +26,7 @@ readCBoard board i j
   | otherwise                            = readCBoardUnsafe board i j
 
 readCBoardUnsafe :: CBoard -> Int -> Int -> Color
-readCBoardUnsafe board@(CBoard bl wh) i j =
+readCBoardUnsafe (CBoard bl wh) i j =
   let ind = 8 * j + i - 9
       mask= 1 `shiftL` ind :: Int64
       bbit = bl .&. mask
@@ -47,6 +42,7 @@ isValidMoveC board color (i,j) =
        else
            False 
 -- 8方向
+dirs :: [(Int,Int)]
 dirs = [ (i,j) | i <- [1,0,-1], j <- [1,0,-1] ] \\ [(0,0)]
 
 isEffectiveC :: CBoard -> Color -> (Int,Int) -> Bool
@@ -59,8 +55,8 @@ flippableIndicesC board color (i,j) =
     concatMap (\(di,dj) -> flippableIndicesLineC board color (di,dj) (i+di,j+dj)) dirs
 
 flippableIndicesLineC :: CBoard -> Color -> (Int,Int) -> (Int,Int) -> [(Int,Int)]
-flippableIndicesLineC board color (di,dj) (i,j) =
-    checkLine (di,dj) (i,j) []
+flippableIndicesLineC board color posDiff pos =
+    checkLine posDiff pos []
     where                    
       ocolor = oppositeColor color
       checkLine (di,dj) (i,j) r =
@@ -79,8 +75,8 @@ flippableIndicesLineC board color (di,dj) (i,j) =
                       []
 
 doMoveC :: CBoard -> Mv -> Color -> CBoard 
-doMoveC board GiveUp  color = board
-doMoveC board Pass    color = board
+doMoveC board GiveUp  _color = board
+doMoveC board Pass    _color = board
 doMoveC board@(CBoard bl wh) (M i j) color =       
     let ms = (i,j) : flippableIndicesC board color (i,j)
         val = runST $ do
@@ -114,6 +110,7 @@ showCBoard board =
       putC c | c == none  = " " 
              | c == white = "O"
              | c == black = "X"
+             | otherwise  = undefined
       putBoardLine j =
           show j ++ "|" ++
            concatMap (\i -> let e = readCBoardUnsafe board i j in 
