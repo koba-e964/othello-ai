@@ -3,14 +3,10 @@ module AI where
 
 
 
-import Data.Array.IO
-import Data.Array.MArray
 import Data.Bits
-import Data.List ((\\))
 import Data.Maybe
 import Control.Monad 
 
-import System.Random
 import System.Timeout
 import Control.Exception
 import Data.Function
@@ -94,23 +90,21 @@ myPlay board color mode time = do
          _  -> 
              do
                 boards <- newIORef $ map (\mv@(mvi, mvj) -> (mv, doMoveC board (M mvi mvj) color)) ms
-                let blc = countC board black
-                let whc = countC board black
                 opt <- newIORef (Nothing :: Maybe ([Mv], Int))
                 numBoards <- newIORef 0 :: IO (IORef Int)
-                timeout time $ catch (
+                _ <- timeout time $ catch (
                   forM_ [0..] (nextMoveDepth board boards color mode opt numBoards)
-                 ) (\(StopSearch str) -> putStrLn str)
+                 ) (\(StopSearch str) -> putStrLn str) -- this always fails and opt is modified with the result
                 optmv <- readIORef opt
                 numBoardsVal <- readIORef numBoards
-                printf "summary:\n depth : %d\n total #boards: %d\n" (fromMaybe (-1) (fmap (length . fst) optmv)) numBoardsVal
+                printf "summary:\n depth : %d\n total #boards: %d\n" (fromMaybe (-1) (fmap (length . fst) optmv)) numBoardsVal :: IO ()
                 let mv = case optmv of { Nothing -> ( \(i,j) -> M i j) (head ms); Just (o:_, _) -> o; _ -> undefined; }
                 return mv;
 
 -- overwrites opt and stort the optimal value
 -- boards is rearranged after operation
 nextMoveDepth :: CBoard -> IORef [((Int, Int), CBoard)] -> Color -> Heuristics -> IORef (Maybe ([Mv], Int)) -> IORef Int -> Int -> IO ()
-nextMoveDepth board boardsRef color mode opt numBoards depth = do
+nextMoveDepth _board boardsRef color mode opt numBoards depth = do
        curopt <- readIORef opt
        boards <- readIORef boardsRef
        oldNum <- readIORef numBoards
@@ -127,10 +121,10 @@ nextMoveDepth board boardsRef color mode opt numBoards depth = do
        -- putStrLn ""
        writeIORef boardsRef $ map (\(mv, _) -> (mv, fromMaybe (error "(>_<)") $ lookup mv boards)) valsSort
        let ((i, j), (optval, path)) = if null vals then undefined else head valsSort
-       printf "depth = %d, move = (%d, %d), value = %d\n" depth i j optval
+       printf "depth = %d, move = (%d, %d), value = %d\n" depth i j optval :: IO ()
        putStrLn $ "path = " ++ show (fmap (M i j :) path)
        newNum <- readIORef numBoards
-       printf "number of boards in depth %d: %d\n" depth (newNum - oldNum)
+       printf "number of boards in depth %d: %d\n" depth (newNum - oldNum) :: IO ()
        writeIORef opt $ Just (M i j : fromMaybe [] path, optval) -- path is Just _
 
 alphaBeta :: Heuristics -> CBoard -> Int -> Color -> Color -> Int -> Int -> IORef Int -> IO (Int, Maybe [Mv])
@@ -217,11 +211,8 @@ eval4 board color =
 eval5 :: CBoard -> Color -> Int
 eval5 board color =
   let opp = oppositeColor color
-      blc = countC board black
-      whc = countC board black
       msmy = validMovesC board color
       msopp = validMovesC board opp
-      iv = countC board color 
       myWpop = weightPop board color
       oppWpop = weightPop board (oppositeColor color) in
   myWpop - oppWpop + sum (map weightOfPlay msmy) - sum (map weightOfPlay msopp)
