@@ -5,7 +5,6 @@ module Command where
 import Data.List (elemIndex)
 import Data.Maybe (fromJust) 
 
-import Text.Show
 
 import Data.Char (isSpace)
 
@@ -63,10 +62,13 @@ runParser p s =
     do { (a,[]) <- readP_to_S p s
        ; return a }
 
+parseCommand :: String -> Either String Command
 parseCommand s = 
     case runParser (pCommand <* skipSpaces <* eof) s of 
       [c] -> Right c 
       _   -> Left  $ "Invalid Message: " ++ s 
+
+pCommand :: ReadP Command
 
 pCommand = 
     ( Open <$ 
@@ -91,13 +93,18 @@ pCommand =
     pure Empty 
 
 pByeList :: ReadP [(String,(Int,Int,Int))]
+pNWString :: ReadP String
 pByeList = 
     many ((\a b c d -> (a,(b,c,d))) <$> 
         pNWString <* skipSpaces <*> pInt <* skipSpaces <*> pInt <* skipSpaces <*> pInt <* skipSpaces)
 
 pNWString = many1 (satisfy (not. isSpace))
 
-pInt :: ReadP Int 
+pInt :: ReadP Int
+pColor :: ReadP Color
+pWL :: ReadP WL
+pMove :: ReadP Mv
+
 pInt = readS_to_P reads 
     
 
