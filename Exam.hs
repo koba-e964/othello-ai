@@ -5,7 +5,7 @@ import Data.Array.IO
 import Data.List
 
 import Color
-import Play
+import Common
 import AI
 
 

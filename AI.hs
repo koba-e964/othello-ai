@@ -21,7 +21,8 @@ import Text.Printf
 
 import Color 
 import Command
-import Play
+import Common
+import CBoard
 
 type Heuristics = Int
 

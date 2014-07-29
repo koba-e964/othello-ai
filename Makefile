@@ -1,5 +1,5 @@
 TARGETC=my-reversi
-SRCS=Play.hs Command.hs AI.hs Exam.hs
+SRCS=Common.hs Board.hs CBoard.hs Command.hs AI.hs Exam.hs
 
 all: $(TARGETS) $(TARGETC)
 

@@ -6,7 +6,10 @@ import System.Environment (getArgs)
 import Network 
 
 import Command
-import Play
+import AI
+import Common
+import Board
+import CBoard
 
 import Text.Printf 
 import System.IO
@@ -15,7 +18,6 @@ import Data.IORef
 import Color 
 import Control.Monad
 import System.Console.GetOpt
-import AI
 
 data Config 
     = Config { host :: HostName,
