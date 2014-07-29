@@ -1,3 +1,4 @@
+{-# OPTIONS -fno-warn-unused-imports #-} -- in order to automatically load AI when this is loaded in GHCi
 module Exam where
 
 import Control.Monad
@@ -41,6 +42,7 @@ readBoard str = do
          charToColor 'o' = white
          charToColor 'O' = white
          charToColor '.' = none
+         charToColor _   = undefined
 
 -- | getBoard reads 8 lines and convert them to a board.
 
