@@ -1,7 +1,11 @@
 module Common where
 
 import Data.Array.IO
-import Data.Int
+import Data.Word
+
+-- | A set of places in reversi board.
+
+type Places = Word64
 
 -- 番兵付きの10x10配列
 type Board = IOUArray (Int,Int) Int 
@@ -13,8 +17,8 @@ type Board = IOUArray (Int,Int) Int
 -- | ...
 -- | 56 57 58 59 60 61 62 63
 -- | (i,j) <====> 8*(j-1)+(i-1)
--- | the first Int64 represents the positions of black disks.
--- | the second Int64 represents the positions of white disks.
-data CBoard = CBoard !Int64 !Int64
+-- | the first Places represents the positions of black disks.
+-- | the second Places represents the positions of white disks.
+data CBoard = CBoard !Places !Places
 
 

@@ -5,20 +5,25 @@ import Control.Monad
 import Control.Monad.ST
 import Data.Bits
 import Data.List
-import Data.Int
 import Data.Array.IO
 import Data.STRef
 
 import Color 
 import Command
 
+(<<<) :: Places -> Int -> Places
+(<<<) = shiftL
+infix 8 <<<
 
+(|||) :: Places -> Places -> Places
+(|||) = (.|.)
+infix 5 |||
 {- functions for CBoard -}
 
 -- | (4,4) (27) and (5,5) (36) are white
 -- | (4,5) (28) and (5,4) (35) are black
 initCBoard :: CBoard
-initCBoard = CBoard (2^(27 :: Int) + 2^(36 :: Int)) (2^(28 :: Int) + 2^(35 :: Int))
+initCBoard = CBoard (1 <<< 27 ||| 1 <<< 36) (1 <<< 28 ||| 1 <<< 35)
 
 readCBoard :: CBoard -> Int -> Int -> Color
 readCBoard board i j
@@ -28,7 +33,7 @@ readCBoard board i j
 readCBoardUnsafe :: CBoard -> Int -> Int -> Color
 readCBoardUnsafe (CBoard bl wh) i j =
   let ind = 8 * j + i - 9
-      mask= 1 `shiftL` ind :: Int64
+      mask= 1 <<< ind :: Places
       bbit = bl .&. mask
       wbit = wh .&. mask
     in
@@ -80,9 +85,9 @@ doMoveC board Pass    _color = board
 doMoveC board@(CBoard bl wh) (M i j) color =       
     let ms = (i,j) : flippableIndicesC board color (i,j)
         val = runST $ do
-           st <- newSTRef $ 0 :: ST s (STRef s Int64)
+           st <- newSTRef $ 0 :: ST s (STRef s Places)
            forM_ ms $ \(ii,jj) -> do
-             modifySTRef st ((.|.) (1 `shiftL` (ii + 8 * jj - 9)))
+             modifySTRef st ((.|.) (1 <<< (ii + 8 * jj - 9)))
            readSTRef st
       in
        if color == black
@@ -130,7 +135,7 @@ cboardToBoard board = do
 
 
 boardToCBoard board = do
-    let trans = map $ \(i,j) -> 1 `shiftL` (i + 8 * j - 9) :: Int64
+    let trans = map $ \(i,j) -> 1 <<< (i + 8 * j - 9) :: Places
     bls <- fmap trans $ flip filterM [(i,j) | i <- [1..8], j <- [1..8]] $ \(i,j) -> do
         el <- readArray board (i,j)
         return $ el == black
