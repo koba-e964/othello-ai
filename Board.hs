@@ -1,16 +1,8 @@
 module Board where 
 
 import Control.Monad
-import Control.Monad.ST
-import Data.Bits
-import Data.Int
 import Data.Array.IO
-import Data.Array.MArray
-import Data.List ((\\), foldl')
-import Data.STRef
-
-import System.Random
-import Text.Printf
+import Data.List ((\\))
 
 import Color 
 import Command
@@ -44,6 +36,7 @@ isValidMove board color (i,j) =
        else
            return False 
 -- 8方向
+dirs :: [(Int,Int)]
 dirs = [ (i,j) | i <- [1,0,-1], j <- [1,0,-1] ] \\ [(0,0)]
 
 -- 石を置いたときに、ひっくり返せるかどうか
@@ -58,8 +51,9 @@ flippableIndices board color (i,j) =
     do bs <- mapM (\(di,dj) -> flippableIndicesLine board color (di,dj) (i+di,j+dj)) dirs
        return $ concat bs 
 
-flippableIndicesLine board color (di,dj) (i,j) =
-    checkLine (di,dj) (i,j) []
+flippableIndicesLine :: Board -> Color -> (Int,Int) -> (Int,Int) -> IO [(Int,Int)]
+flippableIndicesLine board color (gdi,gdj) (gi,gj) =
+    checkLine (gdi,gdj) (gi,gj) []
     where                    
       ocolor = oppositeColor color
       checkLine (di,dj) (i,j) r =
@@ -68,10 +62,10 @@ flippableIndicesLine board color (di,dj) (i,j) =
                  checkLine' (di,dj) (i+di,j+dj) ( (i,j) : r )
              else 
                  return []
-      checkLine' (di,dj) (i,j) r =
-          do c <- readArray board (i,j) 
+      checkLine' (di,dj) (ii,jj) r =
+          do c <- readArray board (ii,jj) 
              if c == ocolor then 
-                 checkLine' (di,dj) (i+di,j+dj) ( (i,j) : r )
+                 checkLine' (di,dj) (ii+di,jj+dj) ( (ii,jj) : r )
              else if c == color then 
                       return r 
                   else
@@ -82,8 +76,8 @@ flippableIndicesLine board color (di,dj) (i,j) =
    だが、今のdoMoveの使用方法ならば問題ない。
 -}
 doMove :: Board -> Mv -> Color -> IO Board 
-doMove board GiveUp  color = return board
-doMove board Pass    color = return board
+doMove board GiveUp  _color = return board
+doMove board Pass    _color = return board
 doMove board (M i j) color =       
     do ms <- flippableIndices board color (i,j)
        mapM_ (\(ii,jj) -> writeArray board (ii,jj) color) ms 
@@ -123,6 +117,7 @@ putBoard board =
       putC c | c == none  = putStr " " 
              | c == white = putStr "O"
              | c == black = putStr "X"
+             | otherwise  = undefined
       putBoardLine j =
           do putStr $ show j ++ "|"
              mapM_ (\i -> do e <- readArray board (i,j) 
