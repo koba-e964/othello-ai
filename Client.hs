@@ -45,7 +45,7 @@ showWinLose arg = do
   (x,y) <- readIORef arg
   return $ "(Win, Lose) = (" ++ show x ++ ", " ++ show y ++ ")"
 
-
+defaultConf :: Config
 defaultConf = Config "localhost" 3000 "KobaAI" False False 5 500000 -- default name is changed.
 
 options :: [OptDescr (Config -> Config)]
@@ -130,7 +130,7 @@ showScores scores =
                     ++ " (Win " ++ show w ++ ", Lose " ++ show l ++ ")\n" ++ r) "" scores 
     where
       len  = maximum $ map (length . fst) scores
-      slen = maximum $ map (length . show . (\(a,b,c) -> a) . snd) scores 
+      slen = maximum $ map (length . show . (\(_,(a,_,_)) -> a)) scores 
 
 -- クライアント
 client :: Config -> IO () 
@@ -159,7 +159,7 @@ waitStart !h !conf winLose =
        }
 
 performMyMove :: Handle -> Board -> Color -> [OPMove] -> String -> Int -> Config -> WinLose -> IO ()
-performMyMove h board color hist opname mytime conf winLose =
+performMyMove h board color hist opname _mytime conf winLose =
     do { cboard <- boardToCBoard board
        ; pmove <- myPlay cboard color (heuristicsMode conf) (thinkingTime conf)
        ; let newCBoard = doMoveC cboard pmove color
@@ -183,11 +183,11 @@ waitOpponentMove h board color hist opname mytime conf winLose =
     do { c <- hGetCommand' h
        ; case c of 
            Move omove ->
-               do { board <- doMove board omove (oppositeColor color)
+               do { newBoard <- doMove board omove (oppositeColor color)
                   ; when (verbose conf) $ putStrLn $ replicate 80 '-'
                   ; when (verbose conf) $ putStrLn ("OMove: " ++ show omove ++ " " ++ showColor color) 
-                  ; when (verbose conf) (putBoard board)
-                  ; performMyMove h board color (OMove omove:hist) opname mytime conf winLose }
+                  ; when (verbose conf) (putBoard newBoard)
+                  ; performMyMove h newBoard color (OMove omove:hist) opname mytime conf winLose }
            End wl n m r -> 
                procEnd h board color hist opname wl n m r conf winLose
            _ -> 
@@ -216,7 +216,7 @@ procEnd h board color hist opname wl n m r conf winLose =
 main :: IO () 
 main = withSocketsDo $ 
        do { args <- getArgs 
-          ; (conf, rest) <- parseArg args 
+          ; (conf, _rest) <- parseArg args 
           ; if helpMode conf then 
                 putStrLn usageMessage 
             else 
