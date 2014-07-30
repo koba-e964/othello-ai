@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE BangPatterns, DeriveDataTypeable #-}
 module AI where
 
 
@@ -50,11 +50,11 @@ minBy comp x y = case comp x y of
    LT -> x
    _  -> y
 
-gameEnd :: CBoard -> Bool
-gameEnd board = do
-  let ms1 = validMovesC board black
-      ms2 = validMovesC board white
-   in null ms1 && null ms2
+gameEnd :: Places -> Places -> Bool
+gameEnd my opp = do
+  let ms1 = validMovesSetMO my opp
+      ms2 = validMovesSetMO opp my
+   in ms1 == 0 && ms2 == 0
 
 weightOfPlay :: (Int, Int) -> Int
 weightOfPlay (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-j) where
@@ -114,67 +114,60 @@ nextMoveDepth _board boardsRef color mode opt numBoards depth = do
          Just (_, curoptval) -> do
            when (curoptval >= winValue) $ throwIO (StopSearch $ printf "Path to the victory was detected. (depth = %d)" (depth - 1))
            when (curoptval <= loseValue) $ throwIO (StopSearch $ printf "Path to the defeat was detected. (depth = %d)" (depth - 1))
-       vals <- forM boards $ \(mv, bd) -> do
-         valPath <- alphaBeta mode bd depth color (oppositeColor color) minValue maxValue numBoards
+       vals <- forM boards $ \(mv, CBoard bdbl bdwh) -> do
+         let (!my, !opp) = if color == black then (bdbl,bdwh) else (bdwh, bdbl)
+         valPath <- alphaBeta mode opp my depth minValue maxValue numBoards True
          return (mv, valPath)
-       let valsSort = sortBy (flip (compare `on` (fst . snd))) vals
+       let valsSort = sortBy (compare `on` (fst . snd)) vals
        -- print valsSort -- sort by value, largest first
        -- putStrLn ""
        writeIORef boardsRef $ map (\(mv, _) -> (mv, fromMaybe (error "(>_<)") $ lookup mv boards)) valsSort
        let ((i, j), (optval, path)) = if null vals then undefined else head valsSort
-       printf "depth = %d, move = (%d, %d), value = %d\n" depth i j optval :: IO ()
-       putStrLn $ "path = " ++ show (fmap (M i j :) path)
+       let wholePath = M i j : map conv (fromMaybe [] path) -- path is Just _
+       printf "depth = %d, move = (%d, %d), value = %d\n" depth i j (-optval) :: IO ()
+       putStrLn $ "path = " ++ show wholePath
        newNum <- readIORef numBoards
        printf "number of boards in depth %d: %d\n" depth (newNum - oldNum) :: IO ()
-       writeIORef opt $ Just (M i j : fromMaybe [] path, optval) -- path is Just _
+       writeIORef opt $ Just (wholePath, -optval)
+        where
+          conv 0 = Pass
+          conv x = let t = popCount (x-1) in M (t `mod` 8 + 1) (t `div` 8 + 1)
 
-alphaBeta :: Heuristics -> CBoard -> Int -> Color -> Color -> Int -> Int -> IORef Int -> IO (Int, Maybe [Mv])
-alphaBeta mode board depth mycol curcol alpha beta numBoards = do
-  let isGameEnd = gameEnd board
+alphaBeta :: Heuristics -> Places -> Places -> Int -> Int -> Int -> IORef Int -> Bool -> IO (Int, Maybe [Places])
+alphaBeta mode my opp depth alpha beta numBoards isOpp = do
+  let isGameEnd = gameEnd my opp
   if isGameEnd || depth == 0 then do
-     let result = staticEval board mycol mode isGameEnd
+     let result = staticEval my opp mode isGameEnd isOpp
      modifyIORef numBoards (+1)
      return (result, Just [])
-  else if curcol == mycol then do
+  else do
     aref <- newIORef (alpha, Nothing)
-    let ms = validMovesC board curcol
-    let moves = if null ms then [Pass] else map (\(i,j) -> M i j) ms
-    forM_ moves $ \m -> do
+    let ms = validMovesSetMO my opp
+    if ms == 0 then do
+        (result, path) <- alphaBeta mode opp my (depth - 1) (-beta) (-alpha) numBoards (not isOpp)
+        modifyIORef aref (maxBy (compare `on` fst) (-result, fmap (0 :) path))
+    else
+     forM_ (setToDisks ms) $ \disk -> do
       (calpha, _) <- readIORef aref
       if calpha >= beta then do
          writeIORef aref (beta, Nothing)
       else do 
-        let nxt = doMoveC board m curcol
-        let nextp = oppositeColor curcol
-        (result, path) <- alphaBeta mode nxt (depth - 1) mycol nextp calpha beta numBoards
-        modifyIORef aref (maxBy (compare `on` fst) (result, fmap (m :) path))
+        let (nxtopp, nxtmy) = doMoveBit my opp disk
+        (result, path) <- alphaBeta mode nxtmy nxtopp (depth - 1) (-beta) (-calpha) numBoards (not isOpp)
+        modifyIORef aref (maxBy (compare `on` fst) (-result, fmap (disk :) path))
     readIORef aref
-  else do
-    bref <- newIORef (beta, Nothing)
-    let ms = validMovesC board curcol
-    let moves = if null ms then [Pass] else map (\(i,j) -> M i j) ms
-    forM_ moves $ \m -> do
-      (cbeta, _) <- readIORef bref
-      if alpha >= cbeta then do
-         writeIORef bref (alpha, Nothing)
-      else do 
-        let nxt = doMoveC board m curcol
-        let nextp = oppositeColor curcol
-        (result, path) <- alphaBeta mode nxt (depth - 1) mycol nextp alpha cbeta numBoards
-        modifyIORef bref (minBy (compare `on` fst) (result, fmap (m :) path))
-    readIORef bref
 
-staticEval :: CBoard -> Color -> Heuristics -> Bool -> Int
-staticEval board color mode isGameEnd = 
+staticEval :: Places -> Places -> Heuristics -> Bool -> Bool -> Int
+staticEval my opp mode isGameEnd isOpp = 
   if isGameEnd then
-    let my = countC board color 
-        opp = countC board (oppositeColor color) in
-        case compare my opp of
-          LT -> loseValue + my - opp
-          EQ -> drawValue
-          GT ->  winValue + my - opp
+    let myc = popCount my 
+        oppc = popCount opp in
+        case compare myc oppc of
+          LT -> loseValue + myc - oppc
+          EQ -> if isOpp then -drawValue else drawValue -- in order to make value negative whether my represents places of disks of mine or opponent's.
+          GT ->  winValue + myc - oppc
   else
-    ([eval1, eval2, eval3, eval4, eval5] !! (mode - 1)) board color
+    ([eval1, eval2, eval3, eval4, eval5] !! (mode - 1)) (CBoard my opp) black
 
 {- The number of disks -}
 eval1 :: CBoard -> Color -> Int

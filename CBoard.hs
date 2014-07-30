@@ -38,6 +38,14 @@ maskLeft mask l x = (x &&& mask) `shiftL` l
 
 maskRight :: Places -> Int -> Places -> Places
 maskRight mask l x = (x &&& mask) `shiftR` l
+
+-- | Converts a set to a list of places.
+-- | Every element in returned list is a power of 2.
+setToDisks :: Places -> [Places]
+setToDisks 0 = []
+setToDisks !set = 
+      (set &&& (-set)) : setToDisks (set &&& (set-1))
+
 {- functions for CBoard -}
 
 -- | (4,4) (27) and (5,5) (36) are white
@@ -109,12 +117,18 @@ doMoveC (CBoard bl wh) (M i j) color =
 -}
       let !disk = 1 <<< (i + 8 * j - 9) in
           if color == black then
-            let !val = flippableIndicesSet bl wh disk in
-            CBoard (bl .|. val ||| disk) (wh .&. complement val)
+            let (!nbl, !nwh) = doMoveBit bl wh disk in
+            CBoard nbl nwh
            else
-            let !val = flippableIndicesSet wh bl disk in
-            CBoard (bl .&. complement val) (wh .|. val ||| disk)
+            let (!nwh, !nbl) = doMoveBit wh bl disk in
+            CBoard nbl nwh
 
+-- | disk must be a singleton.
+doMoveBit :: Places -> Places -> Places -> (Places, Places)
+doMoveBit my opp disk = 
+   let !val = flippableIndicesSet my opp disk in
+   (my ||| val ||| disk, opp &&& complement val)
+  
 -- valid moves (CBoard)
 validMovesC :: CBoard -> Color ->  [ (Int,Int) ]
 validMovesC board@(CBoard bl wh) color =
@@ -129,9 +143,16 @@ validMovesSet (CBoard bl wh) color =
   -- let vacant = complement (bl ||| wh) in
   -- positionsToPlaces $ filter (isEffectiveC board color) $ placesToPositions vacant
   if color == black then
-  foldl1 (|||) $ map (\x -> reversibleSetInDir x bl wh) transfers
+  validMovesSetMO bl wh
    else
-  foldl1 (|||) $ map (\x -> reversibleSetInDir x wh bl) transfers
+  validMovesSetMO wh bl
+
+-- | set of valid moves represented by Places
+validMovesSetMO :: Places -> Places -> Places
+validMovesSetMO bl wh =
+  -- let vacant = complement (bl ||| wh) in
+  -- positionsToPlaces $ filter (isEffectiveC board color) $ placesToPositions vacant
+  foldl1 (|||) $ map (\x -> reversibleSetInDir x bl wh) transfers
 
 transfers :: [Places -> Places]
 transfers = [leftTransfer, leftupTransfer, leftdownTransfer, upTransfer, downTransfer, rightupTransfer, rightdownTransfer, rightTransfer]
