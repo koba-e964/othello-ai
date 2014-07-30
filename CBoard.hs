@@ -32,6 +32,11 @@ positionsToPlaces :: [(Int,Int)] -> Places
 positionsToPlaces pl =
   foldr (|||) 0 $ map ( \(i,j) -> 1 <<< (i + 8 * j - 9)) pl 
 
+maskLeft :: Places -> Int -> Places -> Places
+maskLeft mask l x = (x &&& mask) `shiftL` l
+
+maskRight :: Places -> Int -> Places -> Places
+maskRight mask l x = (x &&& mask) `shiftR` l
 {- functions for CBoard -}
 
 -- | (4,4) (27) and (5,5) (36) are white
@@ -114,9 +119,41 @@ validMovesC board@(CBoard bl wh) color =
 
 -- | set of valid moves represented by Places
 validMovesSet :: CBoard -> Color -> Places
-validMovesSet board@(CBoard bl wh) color =
-  let vacant = complement (bl ||| wh) in
-  positionsToPlaces $ filter (isEffectiveC board color) $ placesToPositions vacant
+validMovesSet (CBoard bl wh) color =
+  -- let vacant = complement (bl ||| wh) in
+  -- positionsToPlaces $ filter (isEffectiveC board color) $ placesToPositions vacant
+  if color == black then
+  foldl1 (|||) $ map (\x -> reversibleSetInDir x bl wh) transfers
+   else
+  foldl1 (|||) $ map (\x -> reversibleSetInDir x wh bl) transfers
+
+transfers :: [Places -> Places]
+transfers = [leftTransfer, leftupTransfer, leftdownTransfer, upTransfer, downTransfer, rightupTransfer, rightdownTransfer, rightTransfer]
+
+leftTransfer :: Places -> Places
+leftupTransfer :: Places -> Places
+leftdownTransfer :: Places -> Places
+upTransfer :: Places -> Places
+downTransfer :: Places -> Places
+rightupTransfer :: Places -> Places
+rightdownTransfer :: Places -> Places
+rightTransfer :: Places -> Places
+
+leftTransfer      = maskRight 0xffffffffffffff00 8
+leftupTransfer    = maskRight 0xfefefefefefefe00 9
+leftdownTransfer  = maskRight 0x7f7f7f7f7f7f7f00 7
+upTransfer        = maskRight 0xfefefefefefefefe 1
+downTransfer      = maskLeft  0x7f7f7f7f7f7f7f7f 1
+rightupTransfer   = maskLeft  0x00fefefefefefefe 7
+rightdownTransfer = maskLeft  0x007f7f7f7f7f7f7f 9
+rightTransfer     = maskLeft  0x00ffffffffffffff 8
+
+reversibleSetInDir :: (Places -> Places) -> Places -> Places -> Places
+reversibleSetInDir trans my opp = let
+  vacant = complement (my ||| opp)
+  opps = scanl1 (&&&) $ take 6 $ iterate trans (trans opp)
+  mys  = take 6 $ iterate trans (trans $ trans my) in
+  vacant &&& foldl1 (|||) (zipWith (&&&) opps mys)
 
 countC :: CBoard -> Color -> Int 
 countC (CBoard bl wh) color 
