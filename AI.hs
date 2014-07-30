@@ -9,6 +9,7 @@ import Control.Monad
 
 import System.Timeout
 import Control.Exception
+import Data.Array.Unboxed
 import Data.Function
 import Data.List
 import Data.IORef
@@ -75,12 +76,18 @@ weightOfPlace (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-
   sub 1 3 = -1
   sub 3 1 = -1
   sub _ _ = 0
+wpPlayTbl :: UArray (Int,Int) Int
+wpPlayTbl = array ((0,0),(7,255)) [((i-1,j), sum $ map (\k -> weightOfPlay (i,k+1)) $ filter (testBit j) [0..7]) | i <- [1..8], j <- [0..255]]
+weightPlayPop :: Places -> Int
+weightPlayPop places =
+    sum $ [wpPlayTbl ! (i, fromIntegral ((places `shiftR` (8*i)) .&. 0xff)) | i <- [0..7]]
 
+wpTbl :: UArray (Int,Int) Int
+wpTbl = array ((0,0),(7,255)) [((i-1,j), sum $ map (\k -> weightOfPlace (i,k+1)) $ filter (testBit j) [0..7]) | i <- [1..8], j <- [0..255]]
 weightPop :: CBoard -> Color -> Int
 weightPop (CBoard bl wh) color =
-  let bp = if color == black then bl else wh
-      ls = filter ( \(i, j) -> bp .&. (1 `shiftL` (i + 8*j - 9)) /= 0) [(i,j) | i <- [1..8], j <- [1..8]]
-   in sum $ map weightOfPlace ls
+  let bp = if color == black then bl else wh in
+    sum $ [wpTbl ! (i, fromIntegral ((bp `shiftR` (8*i)) .&. 0xff)) | i <- [0..7]]
 -- | timeout : timeout in microseconds (us)
 myPlay :: CBoard -> Color -> Heuristics -> Int -> IO Mv 
 myPlay board color mode time = do
@@ -205,9 +212,9 @@ eval4 board color =
 eval5 :: CBoard -> Color -> Int
 eval5 board color =
   let opp = oppositeColor color
-      msmy = validMovesC board color
-      msopp = validMovesC board opp
+      msmy = validMovesSet board color
+      msopp = validMovesSet board opp
       myWpop = weightPop board color
       oppWpop = weightPop board (oppositeColor color) in
-  myWpop - oppWpop + sum (map weightOfPlay msmy) - sum (map weightOfPlay msopp)
+  myWpop - oppWpop + weightPlayPop msmy - weightPlayPop msopp
 
