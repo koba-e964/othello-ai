@@ -85,6 +85,7 @@ weightPop (CBoard bl wh) color =
 myPlay :: CBoard -> Color -> Heuristics -> Int -> IO Mv 
 myPlay board color mode time = do
     let ms = validMovesC board color in
+    -- let ms = placesToPositions $ validMovesSet board color in 
        case ms of 
          [] -> return Pass
          _  -> 

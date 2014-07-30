@@ -2,22 +2,36 @@ module CBoard where
 
 import Common
 import Control.Monad
-import Control.Monad.ST
 import Data.Bits
 import Data.List
 import Data.Array.IO
-import Data.STRef
 
 import Color 
 import Command
 
 (<<<) :: Places -> Int -> Places
 (<<<) = shiftL
-infix 8 <<<
+infixl 8 <<<
 
 (|||) :: Places -> Places -> Places
 (|||) = (.|.)
-infix 5 |||
+infixl 5 |||
+
+(&&&) :: Places -> Places -> Places
+(&&&) = (.&.)
+infixl 7 &&&
+
+{- utility functions for Places -}
+placesToPositions :: Places -> [(Int,Int)]
+placesToPositions pl =
+  map (\x -> (x `mod` 8 + 1, x `div` 8 + 1)) $ sub pl where
+  sub 0 = []
+  sub x = 
+      popCount (x &&& (-x) - 1) : sub (x &&& (x-1))
+positionsToPlaces :: [(Int,Int)] -> Places
+positionsToPlaces pl =
+  foldr (|||) 0 $ map ( \(i,j) -> 1 <<< (i + 8 * j - 9)) pl 
+
 {- functions for CBoard -}
 
 -- | (4,4) (27) and (5,5) (36) are white
@@ -84,11 +98,7 @@ doMoveC board GiveUp  _color = board
 doMoveC board Pass    _color = board
 doMoveC board@(CBoard bl wh) (M i j) color =       
     let ms = (i,j) : flippableIndicesC board color (i,j)
-        val = runST $ do
-           st <- newSTRef $ 0 :: ST s (STRef s Places)
-           forM_ ms $ \(ii,jj) -> do
-             modifySTRef st ((.|.) (1 <<< (ii + 8 * jj - 9)))
-           readSTRef st
+        val = positionsToPlaces ms 
       in
        if color == black
          then CBoard (bl .|. val) (wh .&. complement val)
@@ -96,9 +106,17 @@ doMoveC board@(CBoard bl wh) (M i j) color =
 
 -- valid moves (CBoard)
 validMovesC :: CBoard -> Color ->  [ (Int,Int) ]
-validMovesC board color =
-     filter (isValidMoveC board color) 
-             [ (i,j) | i <- [1..8], j <- [1..8]]
+validMovesC board@(CBoard bl wh) color =
+  let vacant = complement (bl ||| wh) in
+  filter (isEffectiveC board color) $ placesToPositions vacant
+--     filter (isValidMoveC board color) 
+--             [ (i,j) | i <- [1..8], j <- [1..8]]
+
+-- | set of valid moves represented by Places
+validMovesSet :: CBoard -> Color -> Places
+validMovesSet board@(CBoard bl wh) color =
+  let vacant = complement (bl ||| wh) in
+  positionsToPlaces $ filter (isEffectiveC board color) $ placesToPositions vacant
 
 countC :: CBoard -> Color -> Int 
 countC (CBoard bl wh) color 
