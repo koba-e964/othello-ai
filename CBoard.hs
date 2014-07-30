@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module CBoard where
 
 import Common
@@ -101,13 +102,18 @@ flippableIndicesLineC board color posDiff pos =
 doMoveC :: CBoard -> Mv -> Color -> CBoard 
 doMoveC board GiveUp  _color = board
 doMoveC board Pass    _color = board
-doMoveC board@(CBoard bl wh) (M i j) color =       
-    let ms = (i,j) : flippableIndicesC board color (i,j)
+doMoveC (CBoard bl wh) (M i j) color =       
+{-    let ms = (i,j) : flippableIndicesC board color (i,j)
         val = positionsToPlaces ms 
       in
-       if color == black
-         then CBoard (bl .|. val) (wh .&. complement val)
-         else CBoard (bl .&. complement val) (wh .|. val)
+-}
+      let !disk = 1 <<< (i + 8 * j - 9) in
+          if color == black then
+            let !val = flippableIndicesSet bl wh disk in
+            CBoard (bl .|. val ||| disk) (wh .&. complement val)
+           else
+            let !val = flippableIndicesSet wh bl disk in
+            CBoard (bl .&. complement val) (wh .|. val ||| disk)
 
 -- valid moves (CBoard)
 validMovesC :: CBoard -> Color ->  [ (Int,Int) ]
@@ -154,6 +160,22 @@ reversibleSetInDir trans my opp = let
   opps = scanl1 (&&&) $ take 6 $ iterate trans (trans opp)
   mys  = take 6 $ iterate trans (trans $ trans my) in
   vacant &&& foldl1 (|||) (zipWith (&&&) opps mys)
+
+-- | disk must be a singleton
+flippableIndicesSet :: Places -> Places -> Places -> Places
+flippableIndicesSet my opp disk =
+  foldl1' (|||) (map (\x -> flippableIndicesInDir x my opp disk) transfers) 
+
+-- reference: http://ja.wikipedia.org/wiki/%E3%82%AA%E3%82%BB%E3%83%AD%E3%81%AB%E3%81%8A%E3%81%91%E3%82%8B%E3%83%93%E3%83%83%E3%83%88%E3%83%9C%E3%83%BC%E3%83%89
+flippableIndicesInDir :: (Places -> Places) -> Places -> Places -> Places -> Places
+flippableIndicesInDir trans my opp disk = let
+  ma = trans disk
+  (rev, mask) = sub 0 ma in
+  if mask &&& my /= 0 then rev else 0 where
+    sub !rev 0 = (rev, 0)
+    sub !rev !msk
+       | msk &&& opp == 0 = (rev, msk)
+       | otherwise         = sub (rev ||| msk) (trans msk)
 
 countC :: CBoard -> Color -> Int 
 countC (CBoard bl wh) color 
