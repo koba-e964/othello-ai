@@ -22,7 +22,7 @@ bench times = do
   start <- getCPUTime
   replicateM_ times $ do
     param <- randomIO :: IO Places
-    let x = test2 param
+    let x = test param
     return $! x
   end <- getCPUTime
   return $ end - start

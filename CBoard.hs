@@ -14,6 +14,10 @@ import Command
 (<<<) = shiftL
 infixl 8 <<<
 
+(>>>) :: Places -> Int -> Places
+(>>>) = shiftR
+infixl 8 >>>
+
 (|||) :: Places -> Places -> Places
 (|||) = (.|.)
 infixl 5 |||
@@ -148,11 +152,31 @@ validMovesSet (CBoard bl wh) color =
   validMovesSetMO wh bl
 
 -- | set of valid moves represented by Places
+-- | reference : http://code.google.com/p/edax-reversi/source/browse/src/board.c
 validMovesSetMO :: Places -> Places -> Places
 validMovesSetMO bl wh =
-  -- let vacant = complement (bl ||| wh) in
-  -- positionsToPlaces $ filter (isEffectiveC board color) $ placesToPositions vacant
-  foldl1' (|||) $ map (\x -> reversibleSetInDir x bl wh) transfers
+  let !mask = wh &&& 0x7e7e7e7e7e7e7e7e :: Places
+      !r1 = vmSubMO bl mask 1
+      !r2 = vmSubMO bl wh 8
+      !r3 = vmSubMO bl mask 7
+      !r4 = vmSubMO bl mask 9
+    in
+     (r1 ||| r2 ||| r3 ||| r4) &&& complement (bl ||| wh)
+
+vmSubMO :: Places -> Places -> Int -> Places
+vmSubMO my mask dir = let
+  dir2 = dir + dir
+  fl1 = mask &&& (my <<< dir)
+  fr1 = mask &&& (my >>> dir)
+  fl2 = fl1 ||| mask &&& (fl1 <<< dir)
+  fr2 = fr1 ||| mask &&& (fr1 >>> dir)
+  maskl = mask &&& (mask <<< dir)
+  maskr = mask &&& (mask >>> dir)
+  fl3 = fl2 ||| maskl &&& (fl2 <<< dir2)
+  fr3 = fr2 ||| maskr &&& (fr2 >>> dir2)
+  fl4 = fl3 ||| maskl &&& (fl3 <<< dir2)
+  fr4 = fr3 ||| maskr &&& (fr3 >>> dir2) in
+   fl4 <<< dir ||| fr4 >>> dir
 
 transfers :: [Places -> Places]
 transfers = [leftTransfer, leftupTransfer, leftdownTransfer, upTransfer, downTransfer, rightupTransfer, rightdownTransfer, rightTransfer]

@@ -163,14 +163,14 @@ alphaBeta mode my opp depth alpha beta numBoards isOpp = do
   let isGameEnd = gameEnd my opp
   if isGameEnd || depth == 0 then do
      let result = staticEval my opp mode isGameEnd isOpp
-     modifyIORef numBoards (+1)
+     modifyIORef' numBoards (+1)
      return (result, Just [])
   else do
     aref <- newIORef (alpha, Nothing)
     let ms = validMovesSetMO my opp
     if ms == 0 then do
         (result, path) <- alphaBeta mode opp my (depth - 1) (-beta) (-alpha) numBoards (not isOpp)
-        modifyIORef aref (maxBy (compare `on` fst) (-result, fmap (0 :) path))
+        modifyIORef' aref (maxBy (compare `on` fst) (-result, fmap (0 :) path))
     else
      forM_ (setToDisks ms) $ \disk -> do
       (calpha, _) <- readIORef aref
@@ -179,7 +179,7 @@ alphaBeta mode my opp depth alpha beta numBoards isOpp = do
       else do 
         let (nxtopp, nxtmy) = doMoveBit my opp disk
         (result, path) <- alphaBeta mode nxtmy nxtopp (depth - 1) (-beta) (-calpha) numBoards (not isOpp)
-        modifyIORef aref (maxBy (compare `on` fst) (-result, fmap (disk :) path))
+        modifyIORef' aref (maxBy (compare `on` fst) (-result, fmap (disk :) path))
     readIORef aref
 
 staticEval :: Places -> Places -> Heuristics -> Bool -> Bool -> Int
