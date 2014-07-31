@@ -84,9 +84,8 @@ weightPlayPop places =
 
 wpTbl :: UArray (Int,Int) Int
 wpTbl = array ((0,0),(7,255)) [((i-1,j), sum $ map (\k -> weightOfPlace (i,k+1)) $ filter (testBit j) [0..7]) | i <- [1..8], j <- [0..255]]
-weightPop :: CBoard -> Color -> Int
-weightPop (CBoard bl wh) color =
-  let bp = if color == black then bl else wh in
+weightPop :: Places -> Int
+weightPop bp =
     sum $ [wpTbl ! (i, fromIntegral ((bp `shiftR` (8*i)) .&. 0xff)) | i <- [0..7]]
 -- | timeout : timeout in microseconds (us)
 myPlay :: CBoard -> Color -> Heuristics -> Int -> IO Mv 
@@ -174,47 +173,43 @@ staticEval my opp mode isGameEnd isOpp =
           EQ -> if isOpp then -drawValue else drawValue -- in order to make value negative whether my represents places of disks of mine or opponent's.
           GT ->  winValue + myc - oppc
   else
-    ([eval1, eval2, eval3, eval4, eval5] !! (mode - 1)) (CBoard my opp) black
+    ([eval1, eval2, eval3, eval4, eval5] !! (mode - 1)) my opp
 
 {- The number of disks -}
-eval1 :: CBoard -> Color -> Int
-eval1 board color =
-    let my = countC board color 
-        opp = countC board (oppositeColor color) in
-    my - opp
+eval1 :: Places -> Places -> Int
+eval1 my opp =
+    let my_ = popCount my 
+        opp_ = popCount opp in
+    my_ - opp_
 
-eval2 :: CBoard -> Color -> Int
-eval2 board color =
-  let opp = oppositeColor color
-      ms  = validMovesSet board opp in
+eval2 :: Places -> Places -> Int
+eval2 my opp =
+  let ms  = validMovesSetMO opp my in
   - popCount ms
 
-eval3 :: CBoard -> Color -> Int
-eval3 board color =
-  let opp = oppositeColor color
-      blc = countC board black
-      whc = countC board black
-      msmy = validMovesC board color
-      msopp = validMovesC board opp
-      iv = countC board color in
-  if blc + whc >= 50 then iv - (blc + whc) else length msmy - length msopp
+eval3 :: Places -> Places -> Int
+eval3 my opp =
+  let myc = popCount my
+      oppc = popCount opp
+      msmy = validMovesSetMO my opp
+      msopp = validMovesSetMO opp my
+     in
+  if myc + oppc >= 50 then -oppc else popCount msmy - popCount msopp
 
-eval4 :: CBoard -> Color -> Int
-eval4 board color =
-  let opp = oppositeColor color
-      blc = countC board black
-      whc = countC board black
-      msmy = validMovesC board color
-      msopp = validMovesC board opp
-      iv = countC board color in
-  if blc + whc >= 50 then iv - (blc + whc) else sum (map weightOfPlay msmy) - sum (map weightOfPlay msopp)
+eval4 :: Places -> Places -> Int
+eval4 my opp =
+  let !myc = popCount my
+      !oppc = popCount opp
+      !msmy = validMovesSetMO my opp
+      !msopp = validMovesSetMO opp my
+    in
+  if myc + oppc >= 50 then -oppc else weightPlayPop msmy - weightPlayPop msopp
 
-eval5 :: CBoard -> Color -> Int
-eval5 board color =
-  let opp = oppositeColor color
-      msmy = validMovesSet board color
-      msopp = validMovesSet board opp
-      myWpop = weightPop board color
-      oppWpop = weightPop board (oppositeColor color) in
+eval5 :: Places -> Places -> Int
+eval5 my opp =
+  let !msmy = validMovesSetMO my opp
+      !msopp = validMovesSetMO opp my
+      !myWpop = weightPop my
+      !oppWpop = weightPop opp in
   myWpop - oppWpop + weightPlayPop msmy - weightPlayPop msopp
 
