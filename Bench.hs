@@ -13,12 +13,16 @@ import Text.Printf
 test :: Places -> Int
 test param = eval5 param ((param * 0x123456789) &&& (complement param))
 
+test2 :: Places -> Places
+test2 param = validMovesSetMO param ((param * 0x123456789) &&& (complement param))
+
+
 bench :: Int -> IO Integer
 bench times = do
   start <- getCPUTime
   replicateM_ times $ do
     param <- randomIO :: IO Places
-    let x = test param
+    let x = test2 param
     return $! x
   end <- getCPUTime
   return $ end - start

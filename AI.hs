@@ -9,6 +9,7 @@ import Control.Monad
 
 import System.Timeout
 import Control.Exception
+import Data.Array.Base (unsafeAt)
 import Data.Array.Unboxed
 import Data.Function
 import Data.List
@@ -78,15 +79,33 @@ weightOfPlace (i, j) = sub (if i <= 4 then i else 9-i) (if j <= 4 then j else 9-
   sub _ _ = 0
 wpPlayTbl :: UArray (Int,Int) Int
 wpPlayTbl = array ((0,0),(7,255)) [((i-1,j), sum $ map (\k -> weightOfPlay (i,k+1)) $ filter (testBit j) [0..7]) | i <- [1..8], j <- [0..255]]
+
 weightPlayPop :: Places -> Int
 weightPlayPop places =
-    sum $ [wpPlayTbl ! (i, fromIntegral ((places `shiftR` (8*i)) .&. 0xff)) | i <- [0..7]]
+--    sum $ [unsafeAt wpPlayTbl (i * 256 + fromIntegral ((places `shiftR` (8*i)) .&. 0xff)) | i <- [0..7]]
+    unsafeAt wpPlayTbl (0 + fromIntegral ((places `shiftR` 0) .&. 0xff)) +
+    unsafeAt wpPlayTbl (256 + fromIntegral ((places `shiftR` 8) .&. 0xff)) +
+    unsafeAt wpPlayTbl (512 + fromIntegral ((places `shiftR` 16) .&. 0xff)) +
+    unsafeAt wpPlayTbl (768 + fromIntegral ((places `shiftR` 24) .&. 0xff)) +
+    unsafeAt wpPlayTbl (1024 + fromIntegral ((places `shiftR` 32) .&. 0xff)) +
+    unsafeAt wpPlayTbl (1280 + fromIntegral ((places `shiftR` 40) .&. 0xff)) +
+    unsafeAt wpPlayTbl (1536 + fromIntegral ((places `shiftR` 48) .&. 0xff)) +
+    unsafeAt wpPlayTbl (1792 + fromIntegral ((places `shiftR` 56) .&. 0xff))
 
 wpTbl :: UArray (Int,Int) Int
 wpTbl = array ((0,0),(7,255)) [((i-1,j), sum $ map (\k -> weightOfPlace (i,k+1)) $ filter (testBit j) [0..7]) | i <- [1..8], j <- [0..255]]
+
 weightPop :: Places -> Int
 weightPop bp =
-    sum $ [wpTbl ! (i, fromIntegral ((bp `shiftR` (8*i)) .&. 0xff)) | i <- [0..7]]
+--    sum $ [unsafeAt wpTbl (i * 256 + fromIntegral ((bp `shiftR` (8*i)) .&. 0xff)) | i <- [0..7]]
+    unsafeAt wpTbl (0 + fromIntegral ((bp `shiftR` 0) .&. 0xff)) +
+    unsafeAt wpTbl (256 + fromIntegral ((bp `shiftR` 8) .&. 0xff)) +
+    unsafeAt wpTbl (512 + fromIntegral ((bp `shiftR` 16) .&. 0xff)) +
+    unsafeAt wpTbl (768 + fromIntegral ((bp `shiftR` 24) .&. 0xff)) +
+    unsafeAt wpTbl (1024 + fromIntegral ((bp `shiftR` 32) .&. 0xff)) +
+    unsafeAt wpTbl (1280 + fromIntegral ((bp `shiftR` 40) .&. 0xff)) +
+    unsafeAt wpTbl (1536 + fromIntegral ((bp `shiftR` 48) .&. 0xff)) +
+    unsafeAt wpTbl (1792 + fromIntegral ((bp `shiftR` 56) .&. 0xff))
 -- | timeout : timeout in microseconds (us)
 myPlay :: CBoard -> Color -> Heuristics -> Int -> IO Mv 
 myPlay board color mode time = do

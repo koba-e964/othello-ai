@@ -152,7 +152,7 @@ validMovesSetMO :: Places -> Places -> Places
 validMovesSetMO bl wh =
   -- let vacant = complement (bl ||| wh) in
   -- positionsToPlaces $ filter (isEffectiveC board color) $ placesToPositions vacant
-  foldl1 (|||) $ map (\x -> reversibleSetInDir x bl wh) transfers
+  foldl1' (|||) $ map (\x -> reversibleSetInDir x bl wh) transfers
 
 transfers :: [Places -> Places]
 transfers = [leftTransfer, leftupTransfer, leftdownTransfer, upTransfer, downTransfer, rightupTransfer, rightdownTransfer, rightTransfer]
@@ -184,14 +184,14 @@ reversibleSetInDir trans my opp = let
 
 -- | disk must be a singleton
 flippableIndicesSet :: Places -> Places -> Places -> Places
-flippableIndicesSet my opp disk =
+flippableIndicesSet !my !opp !disk =
   foldl1' (|||) (map (\x -> flippableIndicesInDir x my opp disk) transfers) 
 
 -- reference: http://ja.wikipedia.org/wiki/%E3%82%AA%E3%82%BB%E3%83%AD%E3%81%AB%E3%81%8A%E3%81%91%E3%82%8B%E3%83%93%E3%83%83%E3%83%88%E3%83%9C%E3%83%BC%E3%83%89
 flippableIndicesInDir :: (Places -> Places) -> Places -> Places -> Places -> Places
-flippableIndicesInDir trans my opp disk = let
-  ma = trans disk
-  (rev, mask) = sub 0 ma in
+flippableIndicesInDir !trans !my !opp !disk = let
+  !ma = trans disk
+  (!rev, !mask) = sub 0 ma in
   if mask &&& my /= 0 then rev else 0 where
     sub !rev 0 = (rev, 0)
     sub !rev !msk
