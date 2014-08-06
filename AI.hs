@@ -107,8 +107,8 @@ weightPop bp =
     unsafeAt wpTbl (1536 + fromIntegral ((bp `shiftR` 48) .&. 0xff)) +
     unsafeAt wpTbl (1792 + fromIntegral ((bp `shiftR` 56) .&. 0xff))
 -- | timeout : timeout in microseconds (us)
-myPlay :: CBoard -> Color -> Heuristics -> Int -> IO Mv 
-myPlay board color mode time = do
+myPlay :: CBoard -> Color -> Heuristics -> Int -> Bool ->IO Mv 
+myPlay board color mode time losing = do
     -- let ms = validMovesC board color in
     let ms = placesToPositions $ validMovesSet board color in 
        case ms of 
@@ -119,7 +119,7 @@ myPlay board color mode time = do
                 opt <- newIORef (Nothing :: Maybe ([Mv], Int))
                 numBoards <- newIORef 0 :: IO (IORef Int)
                 _ <- timeout time $ catch (
-                  forM_ [0..] (nextMoveDepth board boards color mode opt numBoards)
+                  forM_ [0..] (nextMoveDepth board boards color mode opt numBoards (if losing then -1 else 1))
                  ) (\(StopSearch str) -> putStrLn str) -- this always fails and opt is modified with the result
                 optmv <- readIORef opt
                 numBoardsVal <- readIORef numBoards
@@ -129,8 +129,8 @@ myPlay board color mode time = do
 
 -- overwrites opt and stort the optimal value
 -- boards is rearranged after operation
-nextMoveDepth :: CBoard -> IORef [((Int, Int), CBoard)] -> Color -> Heuristics -> IORef (Maybe ([Mv], Int)) -> IORef Int -> Int -> IO ()
-nextMoveDepth _board boardsRef color mode opt numBoards depth = do
+nextMoveDepth :: CBoard -> IORef [((Int, Int), CBoard)] -> Color -> Heuristics -> IORef (Maybe ([Mv], Int)) -> IORef Int -> Int -> Int -> IO ()
+nextMoveDepth _board boardsRef color mode opt numBoards factor depth = do
        curopt <- readIORef opt
        boards <- readIORef boardsRef
        oldNum <- readIORef numBoards
@@ -141,7 +141,7 @@ nextMoveDepth _board boardsRef color mode opt numBoards depth = do
            when (curoptval <= loseValue) $ throwIO (StopSearch $ printf "Path to the defeat was detected. (depth = %d)" (depth - 1))
        vals <- forM boards $ \(mv, CBoard bdbl bdwh) -> do
          let (!my, !opp) = if color == black then (bdbl,bdwh) else (bdwh, bdbl)
-         valPath <- alphaBeta mode opp my depth minValue maxValue numBoards True
+         valPath <- alphaBeta mode opp my depth minValue maxValue numBoards True factor
          return (mv, valPath)
        let valsSort = sortBy (compare `on` (fst . snd)) vals
        -- print valsSort -- sort by value, largest first
@@ -158,18 +158,18 @@ nextMoveDepth _board boardsRef color mode opt numBoards depth = do
           conv 0 = Pass
           conv x = let t = popCount (x-1) in M (t `mod` 8 + 1) (t `div` 8 + 1)
 
-alphaBeta :: Heuristics -> Places -> Places -> Int -> Int -> Int -> IORef Int -> Bool -> IO (Int, Maybe [Places])
-alphaBeta mode my opp depth alpha beta numBoards isOpp = do
+alphaBeta :: Heuristics -> Places -> Places -> Int -> Int -> Int -> IORef Int -> Bool -> Int -> IO (Int, Maybe [Places])
+alphaBeta mode my opp depth alpha beta numBoards isOpp factor = do
   let isGameEnd = gameEnd my opp
   if isGameEnd || depth == 0 then do
-     let result = staticEval my opp mode isGameEnd isOpp
+     let result = staticEval my opp mode isGameEnd isOpp * factor
      modifyIORef' numBoards (+1)
      return (result, Just [])
   else do
     aref <- newIORef (alpha, Nothing)
     let ms = validMovesSetMO my opp
     if ms == 0 then do
-        (result, path) <- alphaBeta mode opp my (depth - 1) (-beta) (-alpha) numBoards (not isOpp)
+        (result, path) <- alphaBeta mode opp my (depth - 1) (-beta) (-alpha) numBoards (not isOpp) factor
         modifyIORef' aref (maxBy (compare `on` fst) (-result, fmap (0 :) path))
     else
      forM_ (setToDisks ms) $ \disk -> do
@@ -178,7 +178,7 @@ alphaBeta mode my opp depth alpha beta numBoards isOpp = do
          writeIORef aref (beta, Nothing)
       else do 
         let (nxtopp, nxtmy) = doMoveBit my opp disk
-        (result, path) <- alphaBeta mode nxtmy nxtopp (depth - 1) (-beta) (-calpha) numBoards (not isOpp)
+        (result, path) <- alphaBeta mode nxtmy nxtopp (depth - 1) (-beta) (-calpha) numBoards (not isOpp) factor
         modifyIORef' aref (maxBy (compare `on` fst) (-result, fmap (disk :) path))
     readIORef aref
 
