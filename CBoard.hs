@@ -55,7 +55,7 @@ setToDisks !set =
 -- | (4,4) (27) and (5,5) (36) are white
 -- | (4,5) (28) and (5,4) (35) are black
 initCBoard :: CBoard
-initCBoard = CBoard (1 <<< 27 ||| 1 <<< 36) (1 <<< 28 ||| 1 <<< 35)
+initCBoard = CBoard (1 <<< 28 ||| 1 <<< 35) (1 <<< 27 ||| 1 <<< 36)
 
 readCBoard :: CBoard -> Int -> Int -> Color
 readCBoard board i j
