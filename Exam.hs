@@ -3,10 +3,12 @@ module Exam where
 
 import Control.Monad
 import Data.Array.IO
+import Data.Bits
 import Data.List
 
 import Color
 import Common
+import CBoard
 import AI
 
 
@@ -22,20 +24,22 @@ import AI
 -- |  ........
 -- |  ........
 
-readBoard :: String -> IO Board
+readBoard :: String -> IO CBoard
 readBoard str = do
-     let lns = map (filter (\x -> elem x "xoXO.")) $ lines str
-     let rows = [(i + 1, lns !! i) | i <- [0 .. min 8 (length lns) - 1]]
-     board <- newArray ((0,0), (9,9)) none
-     mapM_ (\i ->
-               do writeArray board (i,0) sentinel 
-                  writeArray board (i,9) sentinel
-                  writeArray board (0,i) sentinel 
-                  writeArray board (9,i) sentinel) [0..9]
-     forM_ rows $ \(rn, row) -> do
-         let cols = [(i + 1, row !! i) | i <- [0 .. min 8 (length row) - 1]]
-         forM_ cols $ \(cn, colc) -> writeArray board (cn, rn) (charToColor colc)
-     return board
+    let lns = map (filter (\x -> elem x "xoXO.")) $ lines str
+    let rows = [(i, lns !! i) | i <- [0 .. min 8 (length lns) - 1]]
+    board <- newArray ((0,0), (7,7)) none :: IO (IOArray (Int,Int) Int)
+    forM_ rows $ \(rn, row) -> do
+        let cols = [(i, row !! i) | i <- [0 .. min 8 (length row) - 1]]
+        forM_ cols $ \(cn, colc) -> writeArray board (cn, rn) (charToColor colc)
+    let trans = map $ \(i,j) -> 1 <<< (i + 8 * j) :: Places
+    bls <- fmap trans $ flip filterM [(i,j) | i <- [0..7], j <- [0..7]] $ \(i,j) -> do
+        el <- readArray board (i,j)
+        return $ el == black
+    whs <- fmap trans $ flip filterM [(i,j) | i <- [0..7], j <- [0..7]] $ \(i,j) -> do
+        el <- readArray board (i,j)
+        return $ el == white
+    return $ CBoard (foldl' (.|.) 0 bls) (foldl' (.|.) 0 whs)
        where
          charToColor 'x' = black
          charToColor 'X' = black
@@ -46,7 +50,7 @@ readBoard str = do
 
 -- | getBoard reads 8 lines and convert them to a board.
 
-getBoard :: IO Board
+getBoard :: IO CBoard
 getBoard = do
   str <- replicateM 8 getLine
   readBoard (intercalate "\n" str)
