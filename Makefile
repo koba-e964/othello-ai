@@ -1,6 +1,6 @@
 TARGETC=my-reversi
 BENCHC =bench
-SRCS=Common.hs Board.hs CBoard.hs Command.hs AI.hs Exam.hs
+SRCS=Common.hs CBoard.hs Command.hs AI.hs Exam.hs
 
 all: $(TARGETS) $(TARGETC)
 

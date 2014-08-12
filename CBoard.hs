@@ -2,10 +2,8 @@
 module CBoard where
 
 import Common
-import Control.Monad
 import Data.Bits
 import Data.List
-import Data.Array.IO
 
 import Color 
 import Command
@@ -243,36 +241,4 @@ showCBoard board =
            concatMap (\i -> let e = readCBoardUnsafe board i j in 
                              putC e ++ " ") [1..8]
              ++ "\n"
-
-{- convertion between CBoard and Board -}
-
-cboardToBoard :: CBoard -> IO Board
-boardToCBoard :: Board -> IO CBoard
-writeToBoard :: CBoard -> Board -> IO ()
-
-cboardToBoard board = do
-  ary <- newArray ((0,0), (9,9)) none
-  writeToBoard board ary
-  return ary
-
-
-boardToCBoard board = do
-    let trans = map $ \(i,j) -> 1 <<< (i + 8 * j - 9) :: Places
-    bls <- fmap trans $ flip filterM [(i,j) | i <- [1..8], j <- [1..8]] $ \(i,j) -> do
-        el <- readArray board (i,j)
-        return $ el == black
-    whs <- fmap trans $ flip filterM [(i,j) | i <- [1..8], j <- [1..8]] $ \(i,j) -> do
-        el <- readArray board (i,j)
-        return $ el == white
-    return $ CBoard (foldl' (.|.) 0 bls) (foldl' (.|.) 0 whs)
-
-writeToBoard cboard board= do
-  mapM_ (\i ->
-     do writeArray board (i,0) sentinel 
-        writeArray board (i,9) sentinel
-        writeArray board (0,i) sentinel 
-        writeArray board (9,i) sentinel) [0..9]
-  forM_ [(i,j) | i <- [1..8], j <- [1..8]] $ \(i,j) ->
-    writeArray board (i,j) (readCBoardUnsafe cboard i j)
-  return ()
 

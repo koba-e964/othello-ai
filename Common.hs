@@ -1,14 +1,10 @@
 module Common where
 
-import Data.Array.IO
 import Data.Word
 
 -- | A set of places in reversi board.
 
 type Places = Word64
-
--- 番兵付きの10x10配列
-type Board = IOUArray (Int,Int) Int 
 
 -- | A efficient data structure for states of reversi board.
 -- | each bit corresponds to a cell in the board:
