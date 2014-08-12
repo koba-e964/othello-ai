@@ -139,6 +139,7 @@ nextMoveDepth _board boardsRef color mode opt numBoards factor depth = do
          Just (_, curoptval) -> do
            when (curoptval >= winValue) $ throwIO (StopSearch $ printf "Path to the victory was detected. (depth = %d)" (depth - 1))
            when (curoptval <= loseValue) $ throwIO (StopSearch $ printf "Path to the defeat was detected. (depth = %d)" (depth - 1))
+           when (curoptval <= drawValue) $ throwIO (StopSearch $ printf "Path to the draw was detected. (depth = %d)" (depth - 1))
        vals <- forM boards $ \(mv, CBoard bdbl bdwh) -> do
          let (!my, !opp) = if color == black then (bdbl,bdwh) else (bdwh, bdbl)
          valPath <- alphaBeta mode opp my depth minValue maxValue numBoards True factor
