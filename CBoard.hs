@@ -26,20 +26,20 @@ infixl 7 &&&
 
 {- utility functions for Places -}
 placesToPositions :: Places -> [(Int,Int)]
-placesToPositions pl =
+placesToPositions !pl =
   map (\x -> (x `mod` 8 + 1, x `div` 8 + 1)) $ sub pl where
   sub 0 = []
   sub x = 
       popCount (x &&& (-x) - 1) : sub (x &&& (x-1))
 positionsToPlaces :: [(Int,Int)] -> Places
-positionsToPlaces pl =
+positionsToPlaces !pl =
   foldr (|||) 0 $ map ( \(i,j) -> 1 <<< (i + 8 * j - 9)) pl 
 
 maskLeft :: Places -> Int -> Places -> Places
-maskLeft mask l x = (x &&& mask) `shiftL` l
+maskLeft !mask !l !x = (x &&& mask) `shiftL` l
 
 maskRight :: Places -> Int -> Places -> Places
-maskRight mask l x = (x &&& mask) `shiftR` l
+maskRight !mask !l !x = (x &&& mask) `shiftR` l
 
 -- | Converts a set to a list of places.
 -- | Every element in returned list is a power of 2.
@@ -56,12 +56,12 @@ initCBoard :: CBoard
 initCBoard = CBoard (1 <<< 28 ||| 1 <<< 35) (1 <<< 27 ||| 1 <<< 36)
 
 readCBoard :: CBoard -> Int -> Int -> Color
-readCBoard board i j
+readCBoard !board !i !j
   | i <= 0 || i >= 9 || j <= 0 || j >= 9 = sentinel
   | otherwise                            = readCBoardUnsafe board i j
 
 readCBoardUnsafe :: CBoard -> Int -> Int -> Color
-readCBoardUnsafe (CBoard bl wh) i j =
+readCBoardUnsafe (CBoard !bl !wh) !i !j =
   let ind = 8 * j + i - 9
       mask= 1 <<< ind :: Places
       bbit = bl .&. mask
@@ -70,7 +70,7 @@ readCBoardUnsafe (CBoard bl wh) i j =
      if bbit /= 0 then black else if wbit /= 0 then white else none
   
 isValidMoveC :: CBoard -> Color -> (Int,Int) -> Bool 
-isValidMoveC board color (i,j) =
+isValidMoveC !board !color (!i,!j) =
     let e = readCBoard board i j in
        if e == none then 
            isEffectiveC board color (i,j)
@@ -127,13 +127,13 @@ doMoveC (CBoard bl wh) (M i j) color =
 
 -- | disk must be a singleton.
 doMoveBit :: Places -> Places -> Places -> (Places, Places)
-doMoveBit my opp disk = 
+doMoveBit !my !opp !disk = 
    let !val = flippableIndicesSet my opp disk in
    (my ||| val ||| disk, opp &&& complement val)
   
 -- valid moves (CBoard)
 validMovesC :: CBoard -> Color ->  [ (Int,Int) ]
-validMovesC board@(CBoard bl wh) color =
+validMovesC board@(CBoard !bl !wh) !color =
   let vacant = complement (bl ||| wh) in
   filter (isEffectiveC board color) $ placesToPositions vacant
 --     filter (isValidMoveC board color) 
@@ -141,7 +141,7 @@ validMovesC board@(CBoard bl wh) color =
 
 -- | set of valid moves represented by Places
 validMovesSet :: CBoard -> Color -> Places
-validMovesSet (CBoard bl wh) color =
+validMovesSet (CBoard !bl !wh) !color =
   -- let vacant = complement (bl ||| wh) in
   -- positionsToPlaces $ filter (isEffectiveC board color) $ placesToPositions vacant
   if color == black then
@@ -152,7 +152,7 @@ validMovesSet (CBoard bl wh) color =
 -- | set of valid moves represented by Places
 -- | reference : http://code.google.com/p/edax-reversi/source/browse/src/board.c
 validMovesSetMO :: Places -> Places -> Places
-validMovesSetMO bl wh =
+validMovesSetMO !bl !wh =
   let !mask = wh &&& 0x7e7e7e7e7e7e7e7e :: Places
       !r1 = vmSubMO bl mask 1
       !r2 = vmSubMO bl wh 8
@@ -162,18 +162,18 @@ validMovesSetMO bl wh =
      (r1 ||| r2 ||| r3 ||| r4) &&& complement (bl ||| wh)
 
 vmSubMO :: Places -> Places -> Int -> Places
-vmSubMO my mask dir = let
-  dir2 = dir + dir
-  fl1 = mask &&& (my <<< dir)
-  fr1 = mask &&& (my >>> dir)
-  fl2 = fl1 ||| mask &&& (fl1 <<< dir)
-  fr2 = fr1 ||| mask &&& (fr1 >>> dir)
-  maskl = mask &&& (mask <<< dir)
-  maskr = mask &&& (mask >>> dir)
-  fl3 = fl2 ||| maskl &&& (fl2 <<< dir2)
-  fr3 = fr2 ||| maskr &&& (fr2 >>> dir2)
-  fl4 = fl3 ||| maskl &&& (fl3 <<< dir2)
-  fr4 = fr3 ||| maskr &&& (fr3 >>> dir2) in
+vmSubMO !my !mask !dir = let
+  !dir2 = dir + dir
+  !fl1 = mask &&& (my <<< dir)
+  !fr1 = mask &&& (my >>> dir)
+  !fl2 = fl1 ||| mask &&& (fl1 <<< dir)
+  !fr2 = fr1 ||| mask &&& (fr1 >>> dir)
+  !maskl = mask &&& (mask <<< dir)
+  !maskr = mask &&& (mask >>> dir)
+  !fl3 = fl2 ||| maskl &&& (fl2 <<< dir2)
+  !fr3 = fr2 ||| maskr &&& (fr2 >>> dir2)
+  !fl4 = fl3 ||| maskl &&& (fl3 <<< dir2)
+  !fr4 = fr3 ||| maskr &&& (fr3 >>> dir2) in
    fl4 <<< dir ||| fr4 >>> dir
 
 transfers :: [Places -> Places]

@@ -31,5 +31,7 @@ main = do
   args <- getArgs
   let times = if null args then 1000000 else read (head args)
   result <- bench times
-  printf "#iteration : %d, time : %d us\n" times (result `div` (10^(6 :: Int))) :: IO ()
+  printf "test1(eval5): #iteration : %d, time : %d us\n" times (result `div` (10^(6 :: Int))) :: IO ()
+  result2 <- bench times
+  printf "test2(validMovesSetMO): #iteration : %d, time : %d us\n" times (result2 `div` (10^(6 :: Int))) :: IO ()
 
