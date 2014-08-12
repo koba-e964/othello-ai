@@ -134,6 +134,7 @@ nextMoveDepth _board boardsRef color mode opt numBoards factor depth = do
        curopt <- readIORef opt
        boards <- readIORef boardsRef
        oldNum <- readIORef numBoards
+       beta  <- newIORef maxValue -- passed to alphaBeta as `beta'
        case curopt of
          Nothing -> return ()
          Just (_, curoptval) -> do
@@ -142,11 +143,11 @@ nextMoveDepth _board boardsRef color mode opt numBoards factor depth = do
            when (curoptval <= drawValue) $ throwIO (StopSearch $ printf "Path to the draw was detected. (depth = %d)" (depth - 1))
        vals <- forM boards $ \(mv, CBoard bdbl bdwh) -> do
          let (!my, !opp) = if color == black then (bdbl,bdwh) else (bdwh, bdbl)
-         valPath <- alphaBeta mode opp my depth minValue maxValue numBoards True factor
+         cbeta <- readIORef beta
+         valPath <- alphaBeta mode opp my depth minValue (cbeta + 1) numBoards True factor -- minvalue <= val <= beta + 1
+         modifyIORef beta (min (fst valPath)) -- pruning
          return (mv, valPath)
-       let valsSort = sortBy (compare `on` (fst . snd)) vals
-       -- print valsSort -- sort by value, largest first
-       -- putStrLn ""
+       let valsSort = sortBy (compare `on` (fst . snd)) vals -- sort by value, smallest(best) is first
        writeIORef boardsRef $ map (\(mv, _) -> (mv, fromMaybe (error "(>_<)") $ lookup mv boards)) valsSort
        let ((i, j), (optval, path)) = if null vals then undefined else head valsSort
        let wholePath = M i j : map conv (fromMaybe [] path) -- path is Just _
@@ -165,7 +166,7 @@ alphaBeta mode my opp depth alpha beta numBoards isOpp factor = do
   if isGameEnd || depth == 0 then do
      let result = staticEval my opp mode isGameEnd isOpp * factor
      modifyIORef' numBoards (+1)
-     return (result, Just [])
+     return (min result beta, Just [])
   else do
     aref <- newIORef (alpha, Nothing)
     let ms = validMovesSetMO my opp
