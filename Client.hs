@@ -9,6 +9,7 @@ import Command
 import AI
 import Common
 import CBoard
+import Human
 
 import Text.Printf 
 import System.IO
@@ -26,7 +27,8 @@ data Config
                helpMode :: Bool,
                heuristicsMode :: Heuristics,
                thinkingTime ::Int, -- in microseconds
-               losing :: Bool -- attempt to lose
+               losing :: Bool, -- attempt to lose
+               human :: Bool -- played by human
                } 
 
 type WinLose = IORef (Int, Int)
@@ -46,7 +48,7 @@ showWinLose arg = do
   return $ "(Win, Lose) = (" ++ show x ++ ", " ++ show y ++ ")"
 
 defaultConf :: Config
-defaultConf = Config "localhost" 3000 "KobaAI" False False 5 500000 False -- default name is changed.
+defaultConf = Config "localhost" 3000 "KobaAI" False False 5 500000 False False -- default name is changed.
 
 options :: [OptDescr (Config -> Config)]
 options =
@@ -74,6 +76,9 @@ options =
     , Option ['l'] ["losing"]
              (NoArg $ \conf -> conf { losing = True })
              "attempt to lose"
+    , Option ['m'] ["human"]
+             (NoArg $ \conf -> conf { human = True })
+             "human"
     ]
 
 usageMessage :: String
@@ -164,7 +169,9 @@ waitStart !h !conf winLose =
 performMyMove :: Handle -> IORef CBoard -> Color -> [OPMove] -> String -> Int -> Config -> WinLose -> IO ()
 performMyMove h boardRef color hist opname _mytime conf winLose =
     do { cboard <- readIORef boardRef
-       ; pmove <- myPlay cboard color (heuristicsMode conf) (thinkingTime conf) (losing conf)
+       ; pmove <- if human conf 
+           then readHuman cboard color
+           else myPlay cboard color (heuristicsMode conf) (thinkingTime conf) (losing conf)
        ; let newCBoard = doMoveC cboard pmove color
        ; writeIORef boardRef newCBoard
        ; hPutCommand h $ Move pmove 
